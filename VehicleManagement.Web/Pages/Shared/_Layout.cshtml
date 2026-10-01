@@ -1,0 +1,223 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+
+    <title>
+        @ViewData["Title"] - Vehicle Management
+    </title>
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+</head>
+
+<body>
+
+    <div class="app-shell">
+
+        <!-- =====================================================
+             SIDEBAR
+             Desktop: permanently visible
+             Mobile: slide-in navigation
+             ===================================================== -->
+        <aside id="appSidebar"
+               class="mobile-sidebar-container"
+               aria-label="Main navigation">
+
+            <partial name="_Sidebar" />
+
+        </aside>
+
+
+        <!-- Mobile backdrop -->
+        <button type="button"
+                id="sidebarBackdrop"
+                class="sidebar-backdrop"
+                aria-label="Close navigation"
+                tabindex="-1">
+        </button>
+
+
+        <div class="app-main">
+
+            <!-- =====================================================
+                 HEADER
+                 ===================================================== -->
+            <div class="mobile-header-wrapper">
+
+                <button type="button"
+                        id="mobileMenuButton"
+                        class="mobile-menu-button"
+                        aria-label="Open navigation"
+                        aria-controls="appSidebar"
+                        aria-expanded="false">
+
+                    <svg viewBox="0 0 24 24"
+                         aria-hidden="true">
+                        <path d="M4 7h16"></path>
+                        <path d="M4 12h16"></path>
+                        <path d="M4 17h16"></path>
+                    </svg>
+
+                </button>
+
+                <partial name="_Header" />
+
+            </div>
+
+
+            <!-- =====================================================
+                 PAGE CONTENT
+                 ===================================================== -->
+            <main class="app-content">
+                @RenderBody()
+            </main>
+
+
+            <!-- =====================================================
+                 FOOTER
+                 ===================================================== -->
+            <partial name="_Footer" />
+
+        </div>
+
+    </div>
+
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="~/js/site.js"
+            asp-append-version="true">
+    </script>
+
+
+    <!-- =========================================================
+         MOBILE NAVIGATION
+         ========================================================= -->
+    <script>
+        (() => {
+
+            const sidebar = document.getElementById("appSidebar");
+            const menuButton = document.getElementById("mobileMenuButton");
+            const backdrop = document.getElementById("sidebarBackdrop");
+
+            if (!sidebar || !menuButton || !backdrop) {
+                return;
+            }
+
+
+            /* -----------------------------------------------------
+               Open navigation
+               ----------------------------------------------------- */
+
+            function openSidebar() {
+
+                sidebar.classList.add("mobile-open");
+                backdrop.classList.add("visible");
+
+                menuButton.setAttribute("aria-expanded", "true");
+
+                document.body.classList.add("mobile-navigation-open");
+            }
+
+
+            /* -----------------------------------------------------
+               Close navigation
+               ----------------------------------------------------- */
+
+            function closeSidebar() {
+
+                sidebar.classList.remove("mobile-open");
+                backdrop.classList.remove("visible");
+
+                menuButton.setAttribute("aria-expanded", "false");
+
+                document.body.classList.remove("mobile-navigation-open");
+            }
+
+
+            /* -----------------------------------------------------
+               Hamburger
+               ----------------------------------------------------- */
+
+            menuButton.addEventListener("click", () => {
+
+                if (sidebar.classList.contains("mobile-open")) {
+                    closeSidebar();
+                }
+                else {
+                    openSidebar();
+                }
+
+            });
+
+
+            /* -----------------------------------------------------
+               Backdrop
+               ----------------------------------------------------- */
+
+            backdrop.addEventListener("click", closeSidebar);
+
+
+            /* -----------------------------------------------------
+               Close after selecting a navigation link
+               ----------------------------------------------------- */
+
+            sidebar.querySelectorAll("a").forEach(link => {
+
+                link.addEventListener("click", () => {
+
+                    if (window.innerWidth <= 768) {
+                        closeSidebar();
+                    }
+
+                });
+
+            });
+
+
+            /* -----------------------------------------------------
+               Escape key
+               ----------------------------------------------------- */
+
+            document.addEventListener("keydown", event => {
+
+                if (event.key === "Escape" &&
+                    sidebar.classList.contains("mobile-open")) {
+
+                    closeSidebar();
+                }
+
+            });
+
+
+            /* -----------------------------------------------------
+               Reset if resized back to desktop
+               ----------------------------------------------------- */
+
+            window.addEventListener("resize", () => {
+
+                if (window.innerWidth > 768) {
+                    closeSidebar();
+                }
+
+            });
+
+        })();
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+
+</body>
+
+</html>

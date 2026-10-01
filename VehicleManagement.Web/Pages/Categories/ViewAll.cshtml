@@ -1,0 +1,351 @@
+@page
+@model VehicleManagement.Web.Pages.Categories.ViewAllModel
+@using System.Text.Json
+@using VehicleManagement.Core.Constants
+
+@{
+    ViewData["Title"] = "All Categories";
+
+    var iconsJson = JsonSerializer.Serialize(VehicleCategoryIcons.Icons);
+
+    var categoriesJson = JsonSerializer.Serialize(
+        Model.Categories.Select(c => new
+        {
+            id = c.Id,
+            name = c.Name,
+            minWeight = c.MinWeight,
+            maxWeight = c.MaxWeight,
+            icon = c.Icon
+        }));
+}
+
+<div class="category-form-page vehicles-list-page">
+
+    <!-- =====================================================
+         PAGE HEADER
+         ===================================================== -->
+
+    <div class="vehicles-page-header">
+        <div>
+            <h1>All Categories</h1>
+
+            <p>
+                View vehicle categories and their current weight ranges.
+            </p>
+        </div>
+    </div>
+
+
+    @if (Model.Categories.Count == 0)
+    {
+        <!-- =================================================
+             EMPTY STATE
+             ================================================= -->
+
+        <div class="vehicle-list-empty-state">
+
+            <div class="vehicle-empty-icon"
+                 aria-hidden="true">
+                ◇
+            </div>
+
+            <h2>No categories found</h2>
+
+            <p>
+                No vehicle categories are currently configured.
+            </p>
+
+            <a asp-page="./Index"
+               class="category-primary-button">
+                Manage Categories
+            </a>
+
+        </div>
+    }
+    else
+    {
+        <!-- =================================================
+             CURRENT CONFIGURATION
+             SAME STRUCTURE AS CATEGORIES INDEX
+             ================================================= -->
+
+       <!-- =====================================================
+     CURRENT CONFIGURATION
+     Same layout as Categories Index
+     ===================================================== -->
+
+<section class="category-range-card mb-4">
+
+    <div class="category-range-heading">
+        <h2>Current Configuration</h2>
+    </div>
+
+    <div id="currentRangeOverview"
+         class="range-overview">
+    </div>
+
+    <div class="range-rule">
+        <strong>Boundary rule:</strong>
+        the lower boundary is inclusive and the upper boundary is exclusive.
+        A vehicle exactly on a boundary belongs to the category starting at that weight.
+    </div>
+
+</section>
+
+
+        <!-- =================================================
+             CATEGORY LIST
+             ================================================= -->
+
+        <div class="vehicle-list-card category-view-list-card">
+
+            <div class="vehicle-list-header">
+    <div>
+        <h2>Categories (@Model.Categories.Count)</h2>
+    </div>
+</div>
+
+
+            <div class="table-responsive">
+
+                <table class="table table-hover vehicle-table category-view-table">
+
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Lower Boundary</th>
+                            <th>Upper Boundary</th>
+                        </tr>
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (var category in Model.Categories)
+                        {
+                            <tr>
+
+                                <!-- =============================
+                                     CATEGORY
+                                     ============================= -->
+
+                                <td>
+                                    <div class="category-name-with-icon">
+
+                                        <span class="vehicle-category-icon"
+                                            aria-hidden="true">
+                                            @VehicleCategoryIcons.GetSymbol(category.Icon)
+                                        </span>
+
+                                        <div class="category-name-with-count">
+
+                                            <strong>
+                                                @category.Name
+                                            </strong>
+
+                                            @{
+                                                var vehicleCount =
+                                                    Model.VehicleCounts.GetValueOrDefault(category.Id);
+                                            }
+
+                                            <span class="category-vehicle-count">
+                                                @vehicleCount @(vehicleCount == 1 ? "vehicle" : "vehicles")
+                                            </span>
+
+                                        </div>
+
+                                    </div>
+                                </td>
+
+
+                                <!-- =============================
+                                     LOWER BOUNDARY
+                                     ============================= -->
+
+                                <td>
+                                    @category.MinWeight.ToString("N0") kg
+                                </td>
+
+
+                                <!-- =============================
+                                     UPPER BOUNDARY
+                                     ============================= -->
+
+                                <td>
+
+                                    @if (category.MaxWeight.HasValue)
+                                    {
+                                        <span>
+                                            @category.MaxWeight.Value.ToString("N0") kg
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <div class="category-open-ended">
+
+                                            <strong aria-hidden="true">
+                                                ∞
+                                            </strong>
+
+                                            <span>
+                                                Open-ended
+                                            </span>
+
+                                        </div>
+                                    }
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+
+@section Scripts
+{
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            // =====================================================
+            // CATEGORY DATA
+            // =====================================================
+
+            const categories = @Html.Raw(categoriesJson);
+
+            const currentOverview =
+                document.getElementById("currentRangeOverview");
+
+
+            // =====================================================
+            // ICONS
+            // Same icon mapping used by Categories Index
+            // =====================================================
+
+            const iconSymbols = @Html.Raw(iconsJson);
+
+
+            // =====================================================
+            // HELPERS
+            // =====================================================
+
+            function escapeHtml(value) {
+                return String(value ?? "")
+                    .replaceAll("&", "&amp;")
+                    .replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;")
+                    .replaceAll('"', "&quot;")
+                    .replaceAll("'", "&#039;");
+            }
+
+
+            function iconSymbol(icon) {
+                const key = String(icon ?? "other").toLowerCase();
+                return iconSymbols[key] ?? iconSymbols["other"];
+            }
+
+
+            function formatWeight(value) {
+
+                if (
+                    value === null ||
+                    value === undefined ||
+                    value === ""
+                ) {
+                    return "";
+                }
+
+                const number = Number(value);
+
+                return Number.isFinite(number)
+                    ? number.toLocaleString(
+                        undefined,
+                        {
+                            maximumFractionDigits: 2
+                        })
+                    : String(value);
+            }
+
+
+            // =====================================================
+            // CURRENT CONFIGURATION
+            //
+            // IMPORTANT:
+            // This is the SAME renderer used by Categories Index.
+            // Do not replace these class names because site.css
+            // already styles them.
+            // =====================================================
+
+            function renderRange(container, categories) {
+
+                if (!container) {
+                    return;
+                }
+
+                if (!categories.length) {
+                    container.innerHTML = "";
+                    return;
+                }
+
+                container.innerHTML =
+                    categories.map(category => `
+
+                        <div class="range-segment">
+
+                            <div class="range-category-icon">
+                                <span>
+                                    ${iconSymbol(category.icon)}
+                                </span>
+                            </div>
+
+                            <div class="range-category-name">
+                                ${escapeHtml(category.name || "Unnamed")}
+                            </div>
+
+                            <div class="range-line">
+                                <span class="range-start-point"></span>
+                            </div>
+
+                            <div class="range-values">
+
+                                <span>
+                                    ${formatWeight(category.minWeight)}
+                                </span>
+
+                                <span>
+                                    ${
+                                        category.maxWeight === null
+                                            ? "∞"
+                                            : formatWeight(category.maxWeight)
+                                    }
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    `).join("");
+            }
+
+
+            // =====================================================
+            // INITIAL RENDER
+            // =====================================================
+
+            renderRange(
+                currentOverview,
+                categories
+            );
+
+        });
+    </script>
+}

@@ -1,0 +1,1901 @@
+@page
+@model VehicleManagement.Web.Pages.Categories.IndexModel
+@using System.Text.Json
+@using VehicleManagement.Core.Constants
+
+@{
+    ViewData["Title"] = "Categories";
+
+    var databaseJson = JsonSerializer.Serialize(
+        Model.Categories.Select(c => new
+        {
+            id = c.Id,
+            clientKey = $"existing-{c.Id}",
+            name = c.Name,
+            minWeight = c.MinWeight,
+            maxWeight = c.MaxWeight,
+            icon = c.Icon
+        }));
+
+    var draftJson = JsonSerializer.Serialize(
+        Model.ProposedCategories.Select(c => new
+        {
+            id = c.Id,
+            clientKey = c.ClientKey,
+            name = c.Name,
+            minWeight = c.MinWeight,
+            maxWeight = c.MaxWeight,
+            icon = c.Icon
+        }));
+
+    var vehicleWeightsJson =
+    JsonSerializer.Serialize(Model.VehicleWeights);
+
+    var iconsJson = JsonSerializer.Serialize(VehicleCategoryIcons.Icons);
+}
+
+<div class="category-form-page categories-unified-page">
+    <div class="categories-page-header">
+        <div>
+            <h1>Vehicle Categories</h1>
+            <p>Manage the weight ranges used to automatically categorise vehicles.</p>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="alert alert-success" role="status">@successMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.PageErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.PageErrorMessage</div>
+    }
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>We couldn't save the category configuration.</strong>
+            <div asp-validation-summary="ModelOnly" class="mt-2 mb-0"></div>
+        </div>
+    }
+
+    <section class="category-range-card mb-4">
+        <div class="category-range-heading">
+            <h2>Current Configuration</h2>
+        </div>
+
+        <div id="currentRangeOverview" class="range-overview"></div>
+
+        <div id="currentEmptyState" class="category-inline-empty" hidden>
+            No categories are currently configured. Use <strong>+ Add</strong> below to create the first category.
+        </div>
+
+        <div class="range-rule">
+            <strong>Boundary rule:</strong>
+            the lower boundary is inclusive and the upper boundary is exclusive.
+            A vehicle exactly on a boundary belongs to the category starting at that weight.
+        </div>
+    </section>
+
+    <section class="category-range-card mb-4" id="proposedConfiguration" hidden>
+        <div class="category-range-heading d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <h2>Proposed Configuration</h2>
+                <p id="proposedMessage">No pending changes.</p>
+            </div>
+            <span class="pending-indicator" id="pendingIndicator" hidden>Unsaved changes</span>
+        </div>
+
+        <div id="proposedRangeOverview" class="range-overview"></div>
+
+        <div id="proposedEmptyState" class="category-inline-empty" hidden>
+            No categories in the proposed configuration.
+        </div>
+
+        <div class="range-rule">
+            <strong>Preview:</strong>
+            row actions only stage changes. Nothing is written to the database until you select <strong>Save Changes</strong>.
+        </div>
+    </section>
+
+    <section class="category-management-card" id="manageCategories">
+        <div class="category-management-header">
+            <div>
+                <h2>Manage Categories</h2>
+            </div>
+        </div>
+
+        <form method="post" asp-page-handler="SaveChanges" id="categoryManagementForm" novalidate>
+            <div id="operationError" class="alert alert-danger mx-3 mt-3 mb-0" role="alert" hidden></div>
+            <div id="postedCategoryInputs"></div>
+
+            <div class="table-responsive">
+                <table class="table category-management-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Lower Boundary</th>
+                            <th>Upper Boundary</th>
+                            <th>Icon</th>
+                            <th class="category-actions-heading">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoryManagementBody"></tbody>
+                </table>
+            </div>
+
+            <div class="category-management-footer">
+                <div class="category-save-note" id="saveNote">
+                    No pending changes.
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button"
+                            class="category-secondary-button"
+                            id="discardChangesButton"
+                            disabled>
+                        Discard Changes
+                    </button>
+                    <button type="submit"
+                            class="category-primary-button"
+                            id="saveChangesButton"
+                            disabled>
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </form>
+    </section>
+</div>
+
+
+<!-- =========================================================
+     AFFECTED / SWALLOWED CATEGORY REVIEW MODAL
+     ========================================================= -->
+
+<div class="modal fade"
+     id="affectedCategoriesModal"
+     tabindex="-1"
+     aria-labelledby="affectedCategoriesModalLabel"
+     aria-hidden="true">
+
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+
+        <div class="modal-content">
+
+            <!-- =================================================
+                 HEADER
+                 ================================================= -->
+
+            <div class="modal-header">
+
+                <div>
+                    <h2 class="modal-title fs-5"
+                        id="affectedCategoriesModalLabel">
+                        Review Affected Categories
+                    </h2>
+
+                    <p class="text-muted mb-0 mt-1 small">
+                        The proposed range completely covers one or more
+                        existing categories.
+                    </p>
+                </div>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                </button>
+
+            </div>
+
+
+            <!-- =================================================
+                 BODY
+                 ================================================= -->
+
+            <div class="modal-body">
+
+                <!-- WARNING -->
+
+                <div class="alert alert-warning">
+
+                    <strong id="affectedWarningText"></strong>
+
+                    <div class="mt-1">
+                        These categories must be removed from the proposed
+                        configuration to keep one continuous range per
+                        category with no gaps or overlaps.
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     AFFECTED CATEGORY TABLE
+                     ================================================= -->
+
+                <div class="affected-category-section">
+
+                    <h3 class="h6 fw-bold mb-3">
+                        Categories that will be removed
+                    </h3>
+
+
+                    <div class="table-responsive">
+
+                        <table class="table align-middle affected-category-table">
+
+                            <thead>
+                                <tr>
+                                    <th>
+                                        Category being removed
+                                    </th>
+
+                                    <th>
+                                        Current Range
+                                    </th>
+
+                                    <th>
+                                        Vehicles Affected
+                                    </th>
+
+                                    <th>
+                                        After Saving
+                                    </th>
+                                </tr>
+                            </thead>
+
+
+                            <tbody id="affectedCategoryTableBody">
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     IMPACT SUMMARY
+                     ================================================= -->
+
+                <div class="affected-vehicle-summary"
+                     id="affectedVehicleSummary">
+                </div>
+
+
+                <!-- =================================================
+                     VEHICLE SAFETY MESSAGE
+                     ================================================= -->
+
+                <div class="alert alert-light border mb-0">
+
+                    <strong>
+                        Vehicles will not be deleted.
+                    </strong>
+
+                    Vehicle categories are calculated automatically
+                    from vehicle weight. After saving, affected vehicles
+                    will use the updated category ranges.
+
+                    Nothing is saved to the database until you select
+                    <strong>Save Changes</strong>.
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 FOOTER
+                 ================================================= -->
+
+            <div class="modal-footer">
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        id="cancelAffectedCategoriesButton">
+                    Continue Editing
+                </button>
+
+
+                <button type="button"
+                        class="btn btn-danger"
+                        id="confirmAffectedCategoriesButton">
+                    Remove Categories &amp; Apply
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="modal fade"
+     id="deleteCategoryReviewModal"
+     tabindex="-1"
+     aria-labelledby="deleteCategoryReviewModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content delete-review-modal">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title fs-5" id="deleteCategoryReviewModalLabel">
+                        Review Category Deletion
+                    </h2>
+                    <p class="text-muted mb-0 mt-1 small">
+                        Review how the weight range will be reassigned before staging this deletion.
+                    </p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert alert-warning delete-review-warning">
+                    <strong id="deleteWarningText"></strong>
+                    <div class="mt-1">
+                        Vehicles will not be deleted. Their category is derived automatically from vehicle weight.
+                    </div>
+                </div>
+
+                <section class="delete-review-section">
+                    <div class="delete-review-section-heading">
+                        <h3>Current Configuration</h3>
+                        <p>The selected category is highlighted for deletion.</p>
+                    </div>
+                    <div class="delete-scale" id="deleteCurrentScale"></div>
+                </section>
+
+                <section class="delete-review-section" id="deleteBoundarySection" hidden>
+                    <div class="delete-review-section-heading">
+                        <h3>Reassign Weight Range</h3>
+                        <p id="deleteBoundaryDescription">
+                            Set the new shared boundary between the remaining categories.
+                        </p>
+                    </div>
+
+                    <div class="delete-boundary-simple">
+                        <label for="deleteBoundaryInput" class="form-label">
+                            New shared boundary
+                        </label>
+                        <div class="delete-boundary-input">
+                            <input type="number"
+                                   class="form-control"
+                                   id="deleteBoundaryInput"
+                                   min="0.01"
+                                   step="any"
+                                   inputmode="decimal"
+                                   autocomplete="off" />
+                            <span>kg</span>
+                        </div>
+                        <div class="form-text">
+                            This becomes the previous category's upper boundary
+                            and the next category's lower boundary.
+                        </div>
+                        <div class="text-danger small mt-1" id="deleteBoundaryError"></div>
+                    </div>
+                </section>
+
+                <section class="delete-review-section">
+                    <div class="delete-review-section-heading">
+                        <h3>Configuration After Deletion</h3>
+                        <p id="deleteAfterDescription">
+                            The remaining categories will continue to cover all vehicle weights.
+                        </p>
+                    </div>
+                    <div class="delete-scale delete-scale-after" id="deleteAfterScale"></div>
+
+                    <div class="delete-new-boundary" id="deleteNewBoundary" hidden>
+                        <strong id="deleteSharedBoundaryPreview"></strong>
+                        <small>New boundary</small>
+                    </div>
+                </section>
+
+                <div class="alert alert-success mb-0" id="deleteValidMessage">
+                    <strong>Valid configuration.</strong>
+                    No gaps or overlaps were detected.
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    Continue Editing
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteButton">
+                    Confirm Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const databaseCategories = @Html.Raw(databaseJson);
+            const submittedDraft = @Html.Raw(draftJson);
+            const vehicleWeights = @Html.Raw(vehicleWeightsJson);
+
+            const iconSymbols = @Html.Raw(iconsJson);
+
+            const allowedIcons = Object.entries(iconSymbols).map(([value, symbol]) => ({
+                value,
+                symbol,
+                label: value === "suv"
+                    ? "SUV"
+                    : value
+                        .split("-")
+                        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                        .join(" ")
+            }));
+
+            const form = document.getElementById("categoryManagementForm");
+            const tableBody = document.getElementById("categoryManagementBody");
+            const currentOverview = document.getElementById("currentRangeOverview");
+            const currentEmpty = document.getElementById("currentEmptyState");
+            const proposedConfiguration = document.getElementById("proposedConfiguration");
+            const proposedOverview = document.getElementById("proposedRangeOverview");
+            const proposedEmpty = document.getElementById("proposedEmptyState");
+            const proposedMessage = document.getElementById("proposedMessage");
+            const pendingIndicator = document.getElementById("pendingIndicator");
+            const saveButton = document.getElementById("saveChangesButton");
+            const discardButton = document.getElementById("discardChangesButton");
+            const postedInputs = document.getElementById("postedCategoryInputs");
+            const operationError = document.getElementById("operationError");
+            const saveNote = document.getElementById("saveNote");
+
+            const deleteModalElement = document.getElementById("deleteCategoryReviewModal");
+            const deleteModal = deleteModalElement && window.bootstrap
+                ? new bootstrap.Modal(deleteModalElement)
+                : null;
+
+            const affectedModalElement = document.getElementById("affectedCategoriesModal");
+            const affectedModal = affectedModalElement && window.bootstrap
+                ? new bootstrap.Modal(affectedModalElement)
+                : null;
+
+            let pendingAffectedOperation = null;
+            let confirmedDeletedKeys = new Set();
+
+            const baselineDraft = normalizeClientKeys(clone(databaseCategories));
+            let acceptedDraft = normalizeClientKeys(clone(submittedDraft));
+            let workingDraft = clone(acceptedDraft);
+
+            let activeMode = null;
+            let activeIndex = null;
+            let addCase = null;
+            let operationSnapshot = null;
+            let pendingDeleteIndex = null;
+            let pendingDeletePreview = null;
+
+            function clone(value) {
+                return JSON.parse(JSON.stringify(value));
+            }
+
+            function makeClientKey() {
+                if (window.crypto?.randomUUID) {
+                    return `new-${window.crypto.randomUUID()}`;
+                }
+                return `new-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            }
+
+            function normalizeClientKeys(categories) {
+                categories.forEach(c => {
+                    c.clientKey = c.clientKey || (c.id > 0 ? `existing-${c.id}` : makeClientKey());
+                });
+                return categories;
+            }
+
+            function escapeHtml(value) {
+                return String(value ?? "")
+                    .replaceAll("&", "&amp;")
+                    .replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;")
+                    .replaceAll('"', "&quot;")
+                    .replaceAll("'", "&#039;");
+            }
+
+            function iconSymbol(icon) {
+                const key = String(icon ?? "other").toLowerCase();
+                return iconSymbols[key] ?? iconSymbols["other"];
+            }
+
+            function formatWeight(value) {
+                if (value === null || value === undefined || value === "") return "";
+                const number = Number(value);
+                return Number.isFinite(number)
+                    ? number.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                    : String(value);
+            }
+
+            function decimalPlaces(value) {
+                const text = String(value ?? "");
+                if (/e/i.test(text)) {
+                    const number = Number(value);
+                    if (!Number.isFinite(number)) return 99;
+                    const fixed = number.toFixed(10).replace(/0+$/, "").replace(/\.$/, "");
+                    return fixed.includes(".") ? fixed.split(".")[1].length : 0;
+                }
+                return text.includes(".") ? text.split(".")[1].length : 0;
+            }
+
+            function comparable(categories) {
+                return categories.map(c => ({
+                    id: Number(c.id || 0),
+                    name: String(c.name ?? "").trim(),
+                    minWeight: c.minWeight === "" ? "" : Number(c.minWeight),
+                    maxWeight: c.maxWeight === null || c.maxWeight === "" ? null : Number(c.maxWeight),
+                    icon: String(c.icon ?? "").toLowerCase()
+                }));
+            }
+
+            function sameConfiguration(left, right) {
+                return JSON.stringify(comparable(left)) === JSON.stringify(comparable(right));
+            }
+
+            function hasPendingChanges() {
+                return !sameConfiguration(acceptedDraft, baselineDraft);
+            }
+
+            function setOperationError(message = "") {
+                operationError.textContent = message;
+                operationError.hidden = !message;
+            }
+
+            function renderRange(container, emptyState, categories) {
+                if (!categories.length) {
+                    container.innerHTML = "";
+                    emptyState.hidden = false;
+                    return;
+                }
+
+                emptyState.hidden = true;
+                container.innerHTML = categories.map(category => `
+                    <div class="range-segment">
+                        <div class="range-category-icon"><span>${iconSymbol(category.icon)}</span></div>
+                        <div class="range-category-name">${escapeHtml(category.name || "Unnamed")}</div>
+                        <div class="range-line"><span class="range-start-point"></span></div>
+                        <div class="range-values">
+                            <span>${formatWeight(category.minWeight)}</span>
+                            <span>${category.maxWeight === null ? "∞" : formatWeight(category.maxWeight)}</span>
+                        </div>
+                    </div>
+                `).join("");
+            }
+
+            function renderCurrent() {
+                renderRange(currentOverview, currentEmpty, baselineDraft);
+            }
+
+            function renderProposed() {
+                renderRange(proposedOverview, proposedEmpty, workingDraft);
+            }
+
+            function updatePendingState() {
+    const pending = hasPendingChanges();
+
+    /* Show Proposed Configuration only when
+       there are staged changes. */
+    proposedConfiguration.hidden = !pending;
+
+    pendingIndicator.hidden = !pending;
+
+    if (pending) {
+        proposedMessage.textContent =
+            "Preview of the category configuration that will be saved.";
+    }
+
+    saveNote.textContent = activeMode !== null
+        ? "Finish or cancel the active row before saving."
+        : pending
+            ? "Changes are staged only. Save the complete configuration when ready."
+            : "No pending changes.";
+
+    saveButton.disabled = !pending || activeMode !== null;
+    discardButton.disabled = !pending || activeMode !== null;
+}
+
+            function iconPickerHtml(selectedIcon) {
+                return `
+                    <tr class="category-icon-edit-row">
+                        <td colspan="5">
+                            <div class="category-inline-icon-picker">
+                                <div class="category-inline-icon-heading">
+                                    <strong>Choose Icon</strong>
+                                    <span>Select an icon for this category.</span>
+                                </div>
+                                <div class="vehicle-icon-grid">
+                                    ${allowedIcons.map(icon => `
+                                        <button type="button"
+                                                class="vehicle-icon-option ${selectedIcon === icon.value ? "selected" : ""}"
+                                                data-icon-choice="${icon.value}"
+                                                aria-pressed="${selectedIcon === icon.value}">
+                                            <span class="vehicle-icon-symbol">${icon.symbol}</span>
+                                            <span>${escapeHtml(icon.label)}</span>
+                                        </button>
+                                    `).join("")}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+            }
+
+            function topAddRowHtml() {
+                if (activeMode === "add" && addCase === "first" && activeIndex === 0) {
+                    return addEditRowHtml(workingDraft[0], 0, true);
+                }
+
+                return `
+                    <tr class="category-first-add-row ${activeMode !== null ? "row-inactive" : ""}">
+                        <td colspan="4"><span class="text-muted small">Insert before the first category</span></td>
+                        <td class="category-management-actions">
+                            <button type="button"
+                                    class="category-action-button add"
+                                    data-add-before-first
+                                    ${activeMode !== null ? "disabled" : ""}>+ Add</button>
+                        </td>
+                    </tr>`;
+            }
+
+            function displayRowHtml(category, index) {
+                const isLast = index === workingDraft.length - 1;
+                const isNew = Number(category.id) === 0;
+
+                return `
+                    <tr class="category-management-row ${activeMode !== null ? "row-inactive" : ""}" data-index="${index}">
+                        <td>
+                            <strong>${escapeHtml(category.name)}</strong>
+                            ${isNew ? '<span class="category-row-badge">New</span>' : ''}
+                        </td>
+                        <td>${formatWeight(category.minWeight)} kg</td>
+                        <td>
+                            ${isLast
+                                ? '<span class="category-infinity">∞</span><span class="category-final-note">Open-ended</span>'
+                                : `${formatWeight(category.maxWeight)} kg`}
+                        </td>
+                        <td><span class="category-management-icon">${iconSymbol(category.icon)}</span></td>
+                        <td class="category-management-actions">
+                            <div class="category-normal-actions">
+                                <button type="button" class="category-action-button add" data-add-after="${index}" ${activeMode !== null ? "disabled" : ""}>+ Add</button>
+                                <button type="button" class="category-action-button edit" data-edit-index="${index}" ${activeMode !== null ? "disabled" : ""}>Edit</button>
+                                <button type="button" class="category-action-button delete" data-delete-index="${index}" ${activeMode !== null ? "disabled" : ""}>Delete</button>
+                            </div>
+                        </td>
+                    </tr>`;
+            }
+
+            function addEditRowHtml(category, index, isAdd) {
+                const isFirst = index === 0;
+                const isLast = index === workingDraft.length - 1;
+
+                const lowerCell = isFirst
+                    ? `<span class="category-fixed-boundary">0 kg</span><div class="category-final-note">Required start</div>`
+                    : `<div class="category-boundary-edit">
+                           <input type="number" class="form-control category-edit-control" data-active-min min="0" step="any" inputmode="decimal" value="${category.minWeight ?? ""}" aria-label="Lower boundary" />
+                           <span class="boundary-unit">kg</span>
+                       </div>`;
+
+                const upperCell = isLast
+                    ? `<span class="category-infinity">∞</span><span class="category-final-note">Open-ended</span>`
+                    : `<div class="category-boundary-edit">
+                           <input type="number" class="form-control category-edit-control" data-active-max min="0" step="any" inputmode="decimal" value="${category.maxWeight ?? ""}" aria-label="Upper boundary" />
+                           <span class="boundary-unit">kg</span>
+                       </div>`;
+
+                return `
+                    <tr class="category-management-row editing ${isAdd ? "category-new-row" : ""}" data-index="${index}">
+                        <td>
+                            <input type="text"
+                                   class="form-control category-edit-control"
+                                   data-active-name
+                                   maxlength="100"
+                                   autocomplete="off"
+                                   value="${escapeHtml(category.name)}"
+                                   placeholder="Category name"
+                                   aria-label="Category name" />
+                            ${isAdd ? '<span class="category-row-badge mt-1">New</span>' : ''}
+                        </td>
+                        <td>${lowerCell}</td>
+                        <td>${upperCell}</td>
+                        <td><span class="category-management-icon">${iconSymbol(category.icon)}</span></td>
+                        <td class="category-management-actions">
+                            <div class="category-edit-actions">
+                                <button type="button" class="category-action-button done" data-done-operation>Apply</button>
+                                <button type="button" class="category-action-button cancel" data-cancel-operation>Cancel</button>
+                            </div>
+                        </td>
+                    </tr>
+                    ${iconPickerHtml(category.icon)}`;
+            }
+
+            function renderTable() {
+                let html = topAddRowHtml();
+
+                for (let i = 0; i < workingDraft.length; i++) {
+                    const activeRow = activeIndex === i && (activeMode === "edit" || activeMode === "add");
+
+                    if (activeRow) {
+                        if (!(activeMode === "add" && addCase === "first" && i === 0)) {
+                            html += addEditRowHtml(workingDraft[i], i, activeMode === "add");
+                        }
+                        continue;
+                    }
+
+                    html += displayRowHtml(workingDraft[i], i);
+                }
+
+                tableBody.innerHTML = html;
+                wireTableEvents();
+            }
+
+            function renderAll() {
+                renderProposed();
+                renderTable();
+                updatePendingState();
+            }
+
+            function startAddBeforeFirst() {
+                if (activeMode !== null) return;
+                setOperationError();
+                operationSnapshot = clone(acceptedDraft);
+                workingDraft = clone(acceptedDraft);
+                activeMode = "add";
+                addCase = "first";
+                activeIndex = 0;
+
+                if (workingDraft.length === 0) {
+                    workingDraft.push({ id: 0, clientKey: makeClientKey(), name: "", minWeight: 0, maxWeight: null, icon: "car" });
+                } else {
+                    workingDraft.unshift({ id: 0, clientKey: makeClientKey(), name: "", minWeight: 0, maxWeight: null, icon: "car" });
+                }
+
+                renderAll();
+                focusActiveName();
+            }
+
+            function startAddAfter(index) {
+                if (activeMode !== null || index < 0 || index >= acceptedDraft.length) return;
+                setOperationError();
+                operationSnapshot = clone(acceptedDraft);
+                workingDraft = clone(acceptedDraft);
+                activeMode = "add";
+                activeIndex = index + 1;
+
+                const previous = workingDraft[index];
+                const wasFinal = index === workingDraft.length - 1;
+                addCase = wasFinal ? "final" : "middle";
+
+                if (wasFinal) {
+                    const suggestedBoundary = Number(previous.minWeight) + 1;
+                    previous.maxWeight = suggestedBoundary;
+                    workingDraft.splice(activeIndex, 0, {
+                        id: 0,
+                        clientKey: makeClientKey(),
+                        name: "",
+                        minWeight: suggestedBoundary,
+                        maxWeight: null,
+                        icon: "car"
+                    });
+                } else {
+                    const start = Number(previous.maxWeight);
+                    const next = workingDraft[index + 1];
+                    const nextUpper = next.maxWeight === null ? null : Number(next.maxWeight);
+                    const suggestedUpper = nextUpper === null
+                        ? start + 1
+                        : Math.round(((start + nextUpper) / 2) * 100) / 100;
+
+                    workingDraft.splice(activeIndex, 0, {
+                        id: 0,
+                        clientKey: makeClientKey(),
+                        name: "",
+                        minWeight: start,
+                        maxWeight: suggestedUpper,
+                        icon: "car"
+                    });
+                    workingDraft[activeIndex + 1].minWeight = suggestedUpper;
+                }
+
+                renderAll();
+                focusActiveName();
+            }
+
+            function startEdit(index) {
+                if (activeMode !== null || index < 0 || index >= acceptedDraft.length) return;
+                setOperationError();
+                operationSnapshot = clone(acceptedDraft);
+                workingDraft = clone(acceptedDraft);
+                activeMode = "edit";
+                addCase = null;
+                activeIndex = index;
+                renderAll();
+                focusActiveName();
+            }
+
+            function getActiveRow() {
+                return tableBody.querySelector(`.category-management-row.editing[data-index="${activeIndex}"]`);
+            }
+
+            function focusActiveName() {
+                getActiveRow()?.querySelector("[data-active-name]")?.focus();
+            }
+
+            function updateActiveOperationFromInputs() {
+                if (activeMode === null || activeIndex === null) return;
+                const row = getActiveRow();
+                if (!row) return;
+
+                const category = workingDraft[activeIndex];
+                const nameInput = row.querySelector("[data-active-name]");
+                const minInput = row.querySelector("[data-active-min]");
+                const maxInput = row.querySelector("[data-active-max]");
+
+                category.name = nameInput?.value ?? category.name;
+
+                if (minInput) {
+                    category.minWeight = minInput.value;
+                    if (activeIndex > 0) {
+                        workingDraft[activeIndex - 1].maxWeight = minInput.value;
+                    }
+                }
+
+                if (maxInput) {
+                    category.maxWeight = maxInput.value;
+                    if (activeIndex < workingDraft.length - 1) {
+                        workingDraft[activeIndex + 1].minWeight = maxInput.value;
+                    }
+                }
+
+                renderProposed();
+            }
+
+            function validateActiveOperation() {
+                const category = workingDraft[activeIndex];
+                const name = String(category.name ?? "").trim();
+
+                if (!name) return "Category name is required.";
+                if (name.length > 100) return "Category name cannot exceed 100 characters.";
+
+                if (workingDraft.some((other, index) =>
+                    index !== activeIndex &&
+                    String(other.name ?? "").trim().toLowerCase() === name.toLowerCase())) {
+                    return "Category names must be unique.";
+                }
+
+                if (!allowedIcons.some(x => x.value === category.icon)) {
+                    return "Choose a valid icon.";
+                }
+
+                const min = Number(category.minWeight);
+
+                if (!Number.isFinite(min) || min < 0) {
+                    return "Enter a valid lower boundary.";
+                }
+
+                if (decimalPlaces(category.minWeight) > 2) {
+                    return "Lower boundary can have no more than two decimal places.";
+                }
+
+                if (activeIndex === 0 && min !== 0) {
+                    return "The first category must start at 0 kg.";
+                }
+
+                const isLast = activeIndex === workingDraft.length - 1;
+
+                if (!isLast) {
+                    const max = Number(category.maxWeight);
+
+                    if (!Number.isFinite(max)) {
+                        return "Upper boundary is required.";
+                    }
+
+                    if (decimalPlaces(category.maxWeight) > 2) {
+                        return "Upper boundary can have no more than two decimal places.";
+                    }
+
+                    if (max <= min) {
+                        return "Upper boundary must be greater than the lower boundary.";
+                    }
+                }
+
+                /*
+                 * IMPORTANT:
+                 * Do not reject the range merely because it passes across the
+                 * immediately adjacent category. That category may be completely
+                 * swallowed. The swallowed-category review below handles that
+                 * case explicitly.
+                 *
+                 * We only validate against the nearest category that would
+                 * survive outside the new/edited range.
+                 */
+                const swallowed = findCompletelySwallowedCategories();
+                const swallowedKeys = new Set(swallowed.map(categoryKey));
+
+                const snapshotActive = operationSnapshot?.find(original =>
+                    (category.id > 0 && original.id === category.id) ||
+                    (category.clientKey && original.clientKey === category.clientKey));
+
+                const survivingOriginals = (operationSnapshot ?? [])
+                    .filter(original => {
+                        if (snapshotActive &&
+                            categoryKey(original) === categoryKey(snapshotActive)) {
+                            return false;
+                        }
+
+                        return !swallowedKeys.has(categoryKey(original));
+                    })
+                    .sort((a, b) => Number(a.minWeight) - Number(b.minWeight));
+
+                const previousSurvivor = [...survivingOriginals]
+                    .reverse()
+                    .find(original => {
+                        const originalMax = original.maxWeight === null
+                            ? Number.POSITIVE_INFINITY
+                            : Number(original.maxWeight);
+
+                        return originalMax <= min;
+                    });
+
+                if (previousSurvivor &&
+                    min <= Number(previousSurvivor.minWeight)) {
+                    return `Lower boundary must be greater than ${formatWeight(previousSurvivor.minWeight)} kg.`;
+                }
+
+                if (!isLast) {
+                    const max = Number(category.maxWeight);
+
+                    const nextSurvivor = survivingOriginals.find(original =>
+                        Number(original.minWeight) >= max);
+
+                    if (nextSurvivor &&
+                        nextSurvivor.maxWeight !== null &&
+                        max >= Number(nextSurvivor.maxWeight)) {
+                        return `Upper boundary must be less than ${formatWeight(nextSurvivor.maxWeight)} kg.`;
+                    }
+                }
+
+                return "";
+            }
+
+            function findCompletelySwallowedCategories() {
+                if (activeMode === null || activeIndex === null) return [];
+
+                const active = workingDraft[activeIndex];
+                const activeMin = Number(active.minWeight);
+                const activeMax = active.maxWeight === null
+                    ? Number.POSITIVE_INFINITY
+                    : Number(active.maxWeight);
+
+                if (!Number.isFinite(activeMin)) return [];
+
+                return operationSnapshot
+                    .filter(original => {
+                        const sameCategory =
+                            (active.id > 0 && original.id === active.id) ||
+                            (active.clientKey && original.clientKey === active.clientKey);
+
+                        if (sameCategory) return false;
+
+                        const originalMin = Number(original.minWeight);
+                        const originalMax = original.maxWeight === null
+                            ? Number.POSITIVE_INFINITY
+                            : Number(original.maxWeight);
+
+                        return activeMin <= originalMin &&
+                               activeMax >= originalMax;
+                    });
+            }
+
+            function categoryKey(category) {
+                return category.id > 0
+                    ? `id:${category.id}`
+                    : `key:${category.clientKey}`;
+            }
+
+            // =========================================================
+// VEHICLE IMPACT HELPERS
+// =========================================================
+
+function weightBelongsToCategory(weight, category) {
+
+    const min = Number(category.minWeight);
+
+    if (!Number.isFinite(min)) {
+        return false;
+    }
+
+    if (weight < min) {
+        return false;
+    }
+
+    // Final/open-ended category.
+    if (
+        category.maxWeight === null ||
+        category.maxWeight === undefined ||
+        category.maxWeight === ""
+    ) {
+        return true;
+    }
+
+    const max = Number(category.maxWeight);
+
+    return Number.isFinite(max) &&
+           weight < max;
+}
+
+
+// =========================================================
+// FIND CATEGORY FOR A VEHICLE WEIGHT
+//
+// Uses the PROPOSED configuration rather than the saved
+// configuration.
+// =========================================================
+
+function findCategoryForWeight(weight, proposedCategories) {
+
+    return proposedCategories.find(category =>
+        weightBelongsToCategory(weight, category)
+    ) ?? null;
+}
+
+
+// =========================================================
+// GET VEHICLES CURRENTLY ASSOCIATED WITH A CATEGORY
+// =========================================================
+
+function getVehicleWeightsForCategory(category) {
+
+    return vehicleWeights
+        .map(Number)
+        .filter(weight =>
+            Number.isFinite(weight) &&
+            weightBelongsToCategory(weight, category)
+        );
+}
+
+
+// =========================================================
+// BUILD DESTINATION SUMMARY
+//
+// Example:
+// Light — 6 vehicles
+// Heavy — 2 vehicles
+// =========================================================
+
+function buildVehicleDestinationSummary(
+    affectedVehicleWeights,
+    proposedCategories
+) {
+
+    const destinations = new Map();
+
+
+    affectedVehicleWeights.forEach(weight => {
+
+        const destination =
+            findCategoryForWeight(
+                weight,
+                proposedCategories
+            );
+
+        if (!destination) {
+            return;
+        }
+
+
+        const key =
+            categoryKey(destination);
+
+
+        if (!destinations.has(key)) {
+
+            destinations.set(key, {
+                category: destination,
+                count: 0
+            });
+        }
+
+
+        destinations.get(key).count++;
+    });
+
+
+    return Array.from(destinations.values());
+}
+
+            // =========================================================
+// OPEN AFFECTED CATEGORY REVIEW
+// =========================================================
+
+function openAffectedCategoriesModal(categories) {
+
+    if (!affectedModal) {
+
+        setOperationError(
+            "The affected-category review dialog could not be opened. " +
+            "Refresh the page and try again."
+        );
+
+        return;
+    }
+
+
+    // -----------------------------------------------------
+    // Preserve the current pending operation.
+    // -----------------------------------------------------
+
+    pendingAffectedOperation = {
+        categories: clone(categories),
+        workingDraft: clone(workingDraft),
+        activeIndex
+    };
+
+
+    const active =
+        workingDraft[activeIndex];
+
+
+    // -----------------------------------------------------
+    // Warning heading
+    // -----------------------------------------------------
+
+    document.getElementById(
+        "affectedWarningText"
+    ).textContent =
+
+        `${active.name} (${formatRange(active)}) completely covers ` +
+        `${categories.length} ` +
+        `${categories.length === 1
+            ? "category"
+            : "categories"}.`;
+
+
+    // -----------------------------------------------------
+    // Build the proposed configuration AFTER the swallowed
+    // categories are removed.
+    //
+    // This is used only to calculate where vehicles will
+    // belong after saving.
+    // -----------------------------------------------------
+
+    const swallowedKeys =
+        new Set(
+            categories.map(categoryKey)
+        );
+
+
+    const proposedAfterRemoval =
+        clone(workingDraft)
+            .filter(category =>
+                !swallowedKeys.has(
+                    categoryKey(category)
+                )
+            );
+
+
+    // -----------------------------------------------------
+    // Find active category after removal
+    // -----------------------------------------------------
+
+    const activeAfterRemoval =
+        proposedAfterRemoval.find(category =>
+
+            (
+                active.id > 0 &&
+                category.id === active.id
+            )
+            ||
+            (
+                active.clientKey &&
+                category.clientKey ===
+                active.clientKey
+            )
+        );
+
+
+    // -----------------------------------------------------
+    // Reconnect surrounding boundaries exactly as the
+    // confirmed operation will do.
+    // -----------------------------------------------------
+
+    if (activeAfterRemoval) {
+
+        const activePosition =
+            proposedAfterRemoval.indexOf(
+                activeAfterRemoval
+            );
+
+
+        if (activePosition > 0) {
+
+            proposedAfterRemoval[
+                activePosition - 1
+            ].maxWeight =
+                activeAfterRemoval.minWeight;
+        }
+
+
+        if (
+            activePosition <
+            proposedAfterRemoval.length - 1
+        ) {
+
+            proposedAfterRemoval[
+                activePosition + 1
+            ].minWeight =
+                activeAfterRemoval.maxWeight;
+        }
+    }
+
+
+    if (proposedAfterRemoval.length > 0) {
+
+        proposedAfterRemoval[0]
+            .minWeight = 0;
+
+        proposedAfterRemoval[
+            proposedAfterRemoval.length - 1
+        ].maxWeight = null;
+    }
+
+
+    // -----------------------------------------------------
+    // Build table
+    // -----------------------------------------------------
+
+    const tableBody =
+        document.getElementById(
+            "affectedCategoryTableBody"
+        );
+
+
+    let totalAffectedVehicles = 0;
+
+
+    tableBody.innerHTML =
+        categories.map(category => {
+
+            // ---------------------------------------------
+            // Vehicles currently inside swallowed category
+            // ---------------------------------------------
+
+            const affectedWeights =
+                getVehicleWeightsForCategory(
+                    category
+                );
+
+
+            totalAffectedVehicles +=
+                affectedWeights.length;
+
+
+            // ---------------------------------------------
+            // Determine their destination category/categories
+            // using proposed ranges.
+            // ---------------------------------------------
+
+            const destinations =
+                buildVehicleDestinationSummary(
+                    affectedWeights,
+                    proposedAfterRemoval
+                );
+
+
+            let destinationHtml;
+
+
+            if (affectedWeights.length === 0) {
+
+                destinationHtml = `
+                    <span class="text-muted">
+                        No vehicles affected
+                    </span>
+                `;
+            }
+            else if (destinations.length === 0) {
+
+                destinationHtml = `
+                    <span class="text-danger">
+                        Unable to determine destination
+                    </span>
+                `;
+            }
+            else {
+
+                destinationHtml =
+                    destinations.map(destination => {
+
+                        const count =
+                            destination.count;
+
+                        const label =
+                            count === 1
+                                ? "vehicle"
+                                : "vehicles";
+
+
+                        return `
+                            <div class="affected-destination">
+
+                                <span class="affected-destination-arrow">
+                                    →
+                                </span>
+
+                                <strong>
+                                    ${iconSymbol(
+                                        destination.category.icon
+                                    )}
+                                    ${escapeHtml(
+                                        destination.category.name
+                                    )}
+                                </strong>
+
+                                <span class="text-muted">
+                                    ${count} ${label}
+                                </span>
+
+                            </div>
+                        `;
+
+                    }).join("");
+            }
+
+
+            const affectedCount =
+                affectedWeights.length;
+
+
+            const affectedLabel =
+                affectedCount === 1
+                    ? "vehicle"
+                    : "vehicles";
+
+
+            return `
+                <tr>
+
+                    <td>
+
+                        <div class="affected-category-name">
+
+                            <span class="affected-category-icon">
+                                ${iconSymbol(category.icon)}
+                            </span>
+
+                            <strong>
+                                ${escapeHtml(category.name)}
+                            </strong>
+
+                        </div>
+
+                    </td>
+
+
+                    <td>
+
+                        <span class="affected-category-range">
+                            ${escapeHtml(
+                                formatRange(category)
+                            )}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+
+                        <strong class="affected-vehicle-count">
+                            ${affectedCount}
+                        </strong>
+
+                        <span class="text-muted">
+                            ${affectedLabel}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+                        ${destinationHtml}
+                    </td>
+
+                </tr>
+            `;
+
+        }).join("");
+
+
+    // -----------------------------------------------------
+    // Total impact summary
+    // -----------------------------------------------------
+
+    const summary =
+        document.getElementById(
+            "affectedVehicleSummary"
+        );
+
+
+    if (totalAffectedVehicles === 0) {
+
+        summary.innerHTML = `
+            <strong>No vehicles are currently associated
+            with the categories being removed.</strong>
+        `;
+    }
+    else {
+
+        const label =
+            totalAffectedVehicles === 1
+                ? "vehicle"
+                : "vehicles";
+
+
+        summary.innerHTML = `
+            <strong>
+                ${totalAffectedVehicles}
+                ${label} affected in total.
+            </strong>
+
+            <span>
+                Their displayed category will be recalculated
+                from vehicle weight after the configuration is saved.
+            </span>
+        `;
+    }
+
+
+    affectedModal.show();
+}
+
+            function applyActiveOperation() {
+                workingDraft[activeIndex].name = String(workingDraft[activeIndex].name).trim();
+                workingDraft[activeIndex].minWeight = Number(workingDraft[activeIndex].minWeight);
+
+                if (workingDraft[activeIndex].maxWeight !== null) {
+                    workingDraft[activeIndex].maxWeight = Number(workingDraft[activeIndex].maxWeight);
+                }
+
+                if (activeIndex > 0) {
+                    workingDraft[activeIndex - 1].maxWeight = workingDraft[activeIndex].minWeight;
+                }
+
+                if (activeIndex < workingDraft.length - 1) {
+                    workingDraft[activeIndex + 1].minWeight = workingDraft[activeIndex].maxWeight;
+                }
+
+                if (workingDraft.length > 0) {
+                    workingDraft[0].minWeight = 0;
+                    workingDraft[workingDraft.length - 1].maxWeight = null;
+                }
+
+                acceptedDraft = clone(workingDraft);
+                activeMode = null;
+                activeIndex = null;
+                addCase = null;
+                operationSnapshot = null;
+                pendingAffectedOperation = null;
+                setOperationError();
+                renderAll();
+            }
+
+            function finishActiveOperation() {
+                updateActiveOperationFromInputs();
+
+                const error = validateActiveOperation();
+                if (error) {
+                    setOperationError(error);
+                    return;
+                }
+
+                const swallowed = findCompletelySwallowedCategories();
+
+                if (swallowed.length > 0) {
+                    openAffectedCategoriesModal(swallowed);
+                    return;
+                }
+
+                applyActiveOperation();
+            }
+
+            function cancelActiveOperation() {
+                workingDraft = clone(operationSnapshot ?? acceptedDraft);
+                activeMode = null;
+                activeIndex = null;
+                addCase = null;
+                operationSnapshot = null;
+                setOperationError();
+                renderAll();
+            }
+
+            function chooseIcon(value) {
+                if (activeMode === null || activeIndex === null) return;
+                if (!allowedIcons.some(x => x.value === value)) return;
+                workingDraft[activeIndex].icon = value;
+                renderTable();
+                renderProposed();
+                focusActiveName();
+            }
+
+            function formatRange(category) {
+                return category.maxWeight === null
+                    ? `${formatWeight(category.minWeight)} kg and above`
+                    : `${formatWeight(category.minWeight)} – ${formatWeight(category.maxWeight)} kg`;
+            }
+
+            document.getElementById("cancelAffectedCategoriesButton")
+                ?.addEventListener("click", () => {
+                    pendingAffectedOperation = null;
+                    affectedModal?.hide();
+                    focusActiveName();
+                });
+
+            document.getElementById("confirmAffectedCategoriesButton")
+                ?.addEventListener("click", () => {
+                    if (!pendingAffectedOperation || activeIndex === null) return;
+
+                    const swallowedKeys = new Set(
+                        pendingAffectedOperation.categories.map(categoryKey)
+                    );
+
+                    pendingAffectedOperation.categories.forEach(category => {
+                        confirmedDeletedKeys.add(categoryKey(category));
+                    });
+
+                    workingDraft = pendingAffectedOperation.workingDraft
+                        .filter(category => !swallowedKeys.has(categoryKey(category)));
+
+                    const active = workingDraft.find(category =>
+                        (category.id > 0 && pendingAffectedOperation.workingDraft[pendingAffectedOperation.activeIndex].id === category.id) ||
+                        (category.clientKey &&
+                         pendingAffectedOperation.workingDraft[pendingAffectedOperation.activeIndex].clientKey === category.clientKey)
+                    );
+
+                    if (!active) {
+                        affectedModal?.hide();
+                        setOperationError("The active category could not be preserved. Cancel the row and try again.");
+                        return;
+                    }
+
+                    activeIndex = workingDraft.indexOf(active);
+
+                    if (activeIndex > 0) {
+                        workingDraft[activeIndex - 1].maxWeight = active.minWeight;
+                    }
+
+                    if (activeIndex < workingDraft.length - 1) {
+                        workingDraft[activeIndex + 1].minWeight = active.maxWeight;
+                    }
+
+                    if (workingDraft.length > 0) {
+                        workingDraft[0].minWeight = 0;
+                        workingDraft[workingDraft.length - 1].maxWeight = null;
+                    }
+
+                    affectedModal?.hide();
+                    applyActiveOperation();
+                });
+
+            function buildDeletePreview(index, boundaryValue = null) {
+                if (acceptedDraft.length <= 1) {
+                    return { valid: false, error: "At least one category must remain." };
+                }
+
+                const source = clone(acceptedDraft);
+                const selected = source[index];
+                if (!selected) return { valid: false, error: "The selected category could not be found." };
+
+                const previous = index > 0 ? source[index - 1] : null;
+                const next = index < source.length - 1 ? source[index + 1] : null;
+                source.splice(index, 1);
+
+                if (!previous && next) {
+                    source[0].minWeight = 0;
+                    return {
+                        valid: true,
+                        categories: source,
+                        selected,
+                        requiresBoundary: false,
+                        changes: [
+                            `${selected.name} (${formatRange(selected)}) will be removed.`,
+                            `${source[0].name} will now start at 0 kg.`
+                        ]
+                    };
+                }
+
+                if (previous && !next) {
+                    source[source.length - 1].maxWeight = null;
+                    return {
+                        valid: true,
+                        categories: source,
+                        selected,
+                        requiresBoundary: false,
+                        changes: [
+                            `${selected.name} (${formatRange(selected)}) will be removed.`,
+                            `${source[source.length - 1].name} will become open-ended.`
+                        ]
+                    };
+                }
+
+                if (previous && next) {
+                    const previousAfter = source[index - 1];
+                    const nextAfter = source[index];
+                    let boundary = boundaryValue;
+
+                    if (boundary === null || boundary === undefined || boundary === "") {
+                        boundary = Math.round(((Number(selected.minWeight) + Number(selected.maxWeight)) / 2) * 100) / 100;
+                    }
+
+                    const numericBoundary = Number(boundary);
+                    if (!Number.isFinite(numericBoundary)) {
+                        return { valid: false, error: "Enter a valid shared boundary.", requiresBoundary: true, suggestedBoundary: boundary, categories: source, selected };
+                    }
+                    if (decimalPlaces(boundary) > 2) {
+                        return { valid: false, error: "Use no more than two decimal places.", requiresBoundary: true, suggestedBoundary: boundary, categories: source, selected };
+                    }
+                    if (numericBoundary <= Number(previousAfter.minWeight)) {
+                        return { valid: false, error: `Boundary must be greater than ${formatWeight(previousAfter.minWeight)} kg.`, requiresBoundary: true, suggestedBoundary: boundary, categories: source, selected };
+                    }
+                    if (nextAfter.maxWeight !== null && numericBoundary >= Number(nextAfter.maxWeight)) {
+                        return { valid: false, error: `Boundary must be less than ${formatWeight(nextAfter.maxWeight)} kg.`, requiresBoundary: true, suggestedBoundary: boundary, categories: source, selected };
+                    }
+
+                    previousAfter.maxWeight = numericBoundary;
+                    nextAfter.minWeight = numericBoundary;
+
+                    return {
+                        valid: true,
+                        categories: source,
+                        selected,
+                        requiresBoundary: true,
+                        suggestedBoundary: numericBoundary,
+                        changes: [
+                            `${selected.name} (${formatRange(selected)}) will be removed.`,
+                            `${previousAfter.name} will end at ${formatWeight(numericBoundary)} kg.`,
+                            `${nextAfter.name} will start at ${formatWeight(numericBoundary)} kg.`
+                        ]
+                    };
+                }
+
+                return { valid: false, error: "Unable to calculate the resulting category configuration." };
+            }
+
+            function openDeleteModal(index) {
+                if (activeMode !== null) return;
+                setOperationError();
+
+                if (acceptedDraft.length <= 1) {
+                    setOperationError("At least one category must remain. The final category cannot be deleted.");
+                    return;
+                }
+
+                pendingDeleteIndex = index;
+                const selected = acceptedDraft[index];
+                const isMiddle = index > 0 && index < acceptedDraft.length - 1;
+                const boundary = isMiddle
+                    ? Math.round(((Number(selected.minWeight) + Number(selected.maxWeight)) / 2) * 100) / 100
+                    : null;
+
+                renderDeleteModal(buildDeletePreview(index, boundary));
+
+                if (deleteModal) {
+                    deleteModal.show();
+                } else {
+                    setOperationError("The delete review dialog could not be opened. Refresh the page and try again.");
+                }
+            }
+
+            function renderDeleteModal(preview) {
+                pendingDeletePreview = preview;
+
+                const selected = acceptedDraft[pendingDeleteIndex];
+                if (!selected) return;
+
+                const selectedIndex = pendingDeleteIndex;
+                const previous = selectedIndex > 0 ? acceptedDraft[selectedIndex - 1] : null;
+                const next = selectedIndex < acceptedDraft.length - 1
+                    ? acceptedDraft[selectedIndex + 1]
+                    : null;
+
+                document.getElementById("deleteWarningText").textContent =
+                    `${selected.name} (${formatRange(selected)}) will be removed when the complete configuration is saved.`;
+
+                const currentScale = document.getElementById("deleteCurrentScale");
+                currentScale.style.setProperty("--delete-count", acceptedDraft.length);
+                currentScale.innerHTML = acceptedDraft.map((category, index) => `
+                    <div class="delete-scale-segment ${index === selectedIndex ? "deleting" : ""}">
+                        <strong>${escapeHtml(category.name)}</strong>
+                        <span>${escapeHtml(formatRange(category))}</span>
+                        ${index === selectedIndex ? "<small>Deleting</small>" : ""}
+                    </div>
+                `).join("");
+
+                const boundarySection = document.getElementById("deleteBoundarySection");
+                const boundaryInput = document.getElementById("deleteBoundaryInput");
+                const boundaryError = document.getElementById("deleteBoundaryError");
+                const boundaryDescription = document.getElementById("deleteBoundaryDescription");
+
+                boundarySection.hidden = !preview.requiresBoundary;
+
+                if (preview.requiresBoundary) {
+                    boundaryDescription.innerHTML =
+                        `Set the new boundary between <strong>${escapeHtml(previous?.name ?? "")}</strong> and <strong>${escapeHtml(next?.name ?? "")}</strong>.`;
+                    boundaryInput.value = preview.suggestedBoundary ?? "";
+                }
+
+                boundaryError.textContent = preview.valid ? "" : (preview.error ?? "");
+
+                const afterCategories = preview.categories ?? [];
+                const afterScale = document.getElementById("deleteAfterScale");
+                afterScale.style.setProperty("--delete-count", Math.max(afterCategories.length, 1));
+                afterScale.innerHTML = afterCategories.map(category => `
+                    <div class="delete-scale-segment">
+                        <strong>${escapeHtml(category.name)}</strong>
+                        <span>${escapeHtml(formatRange(category))}</span>
+                    </div>
+                `).join("");
+
+                const afterDescription = document.getElementById("deleteAfterDescription");
+
+                if (selectedIndex === 0 && next) {
+                    afterDescription.innerHTML =
+                        `<strong>${escapeHtml(next.name)}</strong> will automatically extend down to 0 kg.`;
+                } else if (selectedIndex === acceptedDraft.length - 1 && previous) {
+                    afterDescription.innerHTML =
+                        `<strong>${escapeHtml(previous.name)}</strong> will automatically become the final open-ended category.`;
+                } else {
+                    afterDescription.textContent =
+                        "The remaining categories will meet at the new shared boundary.";
+                }
+
+                const newBoundary = document.getElementById("deleteNewBoundary");
+                const sharedBoundaryPreview =
+                    document.getElementById("deleteSharedBoundaryPreview");
+
+                newBoundary.hidden = !preview.requiresBoundary;
+
+                if (preview.requiresBoundary) {
+                    const shownBoundary =
+                        preview.suggestedBoundary === null ||
+                        preview.suggestedBoundary === undefined ||
+                        preview.suggestedBoundary === ""
+                            ? "—"
+                            : `${formatWeight(preview.suggestedBoundary)} kg`;
+
+                    sharedBoundaryPreview.textContent = shownBoundary;
+                }
+
+                document.getElementById("deleteValidMessage").hidden = !preview.valid;
+                document.getElementById("confirmDeleteButton").disabled = !preview.valid;
+            }
+
+            document.getElementById("deleteBoundaryInput").addEventListener("input", event => {
+                if (pendingDeleteIndex === null) return;
+                const typedValue = event.target.value;
+                renderDeleteModal(buildDeletePreview(pendingDeleteIndex, typedValue));
+                document.getElementById("deleteBoundaryInput").value = typedValue;
+            });
+
+            document.getElementById("confirmDeleteButton").addEventListener("click", () => {
+                if (!pendingDeletePreview?.valid) return;
+                if (pendingDeletePreview.selected) {
+                    confirmedDeletedKeys.add(categoryKey(pendingDeletePreview.selected));
+                }
+
+                acceptedDraft = clone(pendingDeletePreview.categories);
+                workingDraft = clone(acceptedDraft);
+                pendingDeleteIndex = null;
+                pendingDeletePreview = null;
+                deleteModal?.hide();
+                setOperationError();
+                renderAll();
+            });
+
+            deleteModalElement?.addEventListener("hidden.bs.modal", () => {
+                pendingDeleteIndex = null;
+                pendingDeletePreview = null;
+                document.getElementById("deleteBoundaryError").textContent = "";
+            });
+
+            function wireTableEvents() {
+                tableBody.querySelector("[data-add-before-first]")?.addEventListener("click", startAddBeforeFirst);
+                tableBody.querySelectorAll("[data-add-after]").forEach(button => button.addEventListener("click", () => startAddAfter(Number(button.dataset.addAfter))));
+                tableBody.querySelectorAll("[data-edit-index]").forEach(button => button.addEventListener("click", () => startEdit(Number(button.dataset.editIndex))));
+                tableBody.querySelectorAll("[data-delete-index]").forEach(button => button.addEventListener("click", () => openDeleteModal(Number(button.dataset.deleteIndex))));
+                tableBody.querySelector("[data-done-operation]")?.addEventListener("click", finishActiveOperation);
+                tableBody.querySelector("[data-cancel-operation]")?.addEventListener("click", cancelActiveOperation);
+                tableBody.querySelectorAll("[data-icon-choice]").forEach(button => button.addEventListener("click", () => chooseIcon(button.dataset.iconChoice)));
+
+                const activeRow = getActiveRow();
+                activeRow?.querySelector("[data-active-name]")?.addEventListener("input", updateActiveOperationFromInputs);
+                activeRow?.querySelector("[data-active-min]")?.addEventListener("input", updateActiveOperationFromInputs);
+                activeRow?.querySelector("[data-active-max]")?.addEventListener("input", updateActiveOperationFromInputs);
+            }
+
+            discardButton.addEventListener("click", () => {
+                acceptedDraft = clone(baselineDraft);
+                workingDraft = clone(baselineDraft);
+                activeMode = null;
+                activeIndex = null;
+                addCase = null;
+                operationSnapshot = null;
+                setOperationError();
+                renderAll();
+            });
+
+            function buildPostedInputs() {
+                postedInputs.innerHTML = "";
+
+                let confirmedDeleteIndex = 0;
+                confirmedDeletedKeys.forEach(key => {
+                    if (!key.startsWith("id:")) return;
+
+                    const id = Number(key.substring(3));
+                    if (!Number.isInteger(id) || id <= 0) return;
+
+                    const hidden = document.createElement("input");
+                    hidden.type = "hidden";
+                    hidden.name = `ConfirmedDeletedCategoryIds[${confirmedDeleteIndex}]`;
+                    hidden.value = String(id);
+                    postedInputs.appendChild(hidden);
+                    confirmedDeleteIndex++;
+                });
+
+                acceptedDraft.forEach((category, index) => {
+                    const values = {
+                        Id: category.id,
+                        ClientKey: category.clientKey,
+                        Name: String(category.name ?? "").trim(),
+                        MinWeight: category.minWeight,
+                        MaxWeight: category.maxWeight,
+                        Icon: category.icon
+                    };
+
+                    Object.entries(values).forEach(([field, value]) => {
+                        const input = document.createElement("input");
+                        input.type = "hidden";
+                        input.name = `ProposedCategories[${index}].${field}`;
+                        if (value !== null && value !== undefined) input.value = value;
+                        postedInputs.appendChild(input);
+                    });
+                });
+            }
+
+            form.addEventListener("submit", event => {
+                setOperationError();
+
+                if (activeMode !== null) {
+                    event.preventDefault();
+                    setOperationError("Apply or cancel the active row before saving the complete configuration.");
+                    return;
+                }
+
+                if (!hasPendingChanges()) {
+                    event.preventDefault();
+                    return;
+                }
+
+                if (acceptedDraft.length === 0) {
+                    event.preventDefault();
+                    setOperationError("At least one category is required.");
+                    return;
+                }
+
+                buildPostedInputs();
+                saveButton.disabled = true;
+                discardButton.disabled = true;
+                saveButton.textContent = "Saving...";
+            });
+
+            renderCurrent();
+            renderAll();
+        });
+    </script>
+}

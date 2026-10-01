@@ -1,0 +1,997 @@
+@page
+@model VehicleManagement.Web.Pages.Vehicles.CreateModel
+@using VehicleManagement.Core.Constants
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "Add Vehicle";
+
+    var currentYear = DateTime.UtcNow.Year;
+    var maximumYear = currentYear + 1;
+
+    var iconsJson = JsonSerializer.Serialize(VehicleCategoryIcons.Icons);
+
+    var showSuccessModal =
+        TempData["SuccessMessage"] is string;
+}
+
+<div class="category-form-page">
+
+    <!-- ==========================================
+         PAGE HEADER
+         ========================================== -->
+
+    <div class="category-form-header">
+        <h1>Add Vehicle</h1>
+
+        <p>
+            Enter the vehicle details below.
+            The weight category will be determined automatically.
+        </p>
+    </div>
+
+
+    <!-- ==========================================
+         CURRENT CATEGORY CONFIGURATION
+         ========================================== -->
+
+    @if (Model.Categories.Count > 0)
+    {
+        var orderedCategories = Model.Categories
+            .OrderBy(category => category.MinWeight)
+            .ToList();
+
+        <section class="vehicle-category-scale-card">
+            <div class="vehicle-category-scale-heading">
+                <h2>Current Category Configuration</h2>
+            </div>
+
+            <div class="vehicle-category-line-overview">
+
+                <div class="vehicle-category-line-labels"
+                     style="--category-count:@orderedCategories.Count">
+
+                    @foreach (var category in orderedCategories)
+                    {
+                        var icon = VehicleCategoryIcons.GetSymbol(category.Icon);
+
+                        <div class="vehicle-category-line-label">
+                            <span class="vehicle-category-line-icon">@icon</span>
+                            <strong>@category.Name</strong>
+                        </div>
+                    }
+                </div>
+
+                <div class="vehicle-category-line-scale"
+                     style="--category-count:@orderedCategories.Count">
+
+                    <div class="vehicle-category-line-track"></div>
+
+                    @for (var i = 0; i <= orderedCategories.Count; i++)
+                    {
+                        var position =
+                            orderedCategories.Count == 0
+                                ? 0
+                                : (i * 100.0 / orderedCategories.Count);
+
+                        var boundaryText =
+                            i < orderedCategories.Count
+                                ? orderedCategories[i].MinWeight.ToString("0.##")
+                                : "∞";
+
+                        <div class="vehicle-category-line-boundary"
+                             style="left:@position.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)%">
+
+                            <span class="vehicle-category-line-dot"></span>
+
+                            <span class="vehicle-category-line-value">
+                                @boundaryText
+                            </span>
+                        </div>
+                    }
+                </div>
+
+            </div>
+
+            <div class="vehicle-category-scale-rule">
+                <strong>Boundary rule:</strong>
+                the lower boundary is inclusive and the upper boundary is exclusive.
+                A vehicle exactly on a boundary belongs to the category starting at that weight.
+            </div>
+        </section>
+    }
+
+
+    <!-- ==========================================
+         VEHICLE FORM
+         ========================================== -->
+
+    <div class="category-form-card vehicle-create-card">
+
+        <div class="vehicle-create-section-heading">
+            <h2>Enter Vehicle Details</h2>
+        </div>
+
+
+        <form method="post">
+
+            <div asp-validation-summary="ModelOnly"
+                 class="alert alert-danger"
+                 role="alert">
+            </div>
+
+
+            <!-- ==================================
+                 OWNER
+                 ================================== -->
+
+            <div class="form-group">
+
+                <label asp-for="Vehicle.OwnerName"
+                       class="form-label">
+                    Owner's Name
+                </label>
+
+                <input asp-for="Vehicle.OwnerName"
+                       class="form-control"
+                       placeholder="Enter owner's name"
+                       autocomplete="off" />
+
+                <span asp-validation-for="Vehicle.OwnerName"
+                      class="text-danger">
+                </span>
+
+            </div>
+
+
+            <!-- ==================================
+                 MANUFACTURER + YEAR
+                 ================================== -->
+
+            <div class="vehicle-create-grid">
+
+                <!-- Manufacturer -->
+
+                <div class="form-group">
+
+                    <label asp-for="Vehicle.ManufacturerId"
+                           class="form-label">
+                        Manufacturer
+                    </label>
+
+                    <select asp-for="Vehicle.ManufacturerId"
+                            asp-items="Model.ManufacturerOptions"
+                            class="form-select">
+
+                        <option value="">
+                            Select manufacturer
+                        </option>
+
+                    </select>
+
+                    <span asp-validation-for="Vehicle.ManufacturerId"
+                          class="text-danger">
+                    </span>
+
+                </div>
+
+
+                <!-- Year -->
+
+                <div class="form-group year-picker-wrapper">
+
+                    <label asp-for="Vehicle.YearOfManufacture"
+                           class="form-label">
+                        Year of Manufacture
+                    </label>
+
+                    <button type="button"
+                            id="yearPickerButton"
+                            class="year-picker-input"
+                            aria-haspopup="dialog"
+                            aria-expanded="false">
+
+                        <span id="selectedYearText">
+                            @(Model.Vehicle.YearOfManufacture > 0
+                                ? Model.Vehicle.YearOfManufacture
+                                : currentYear)
+                        </span>
+
+                        <svg class="year-calendar-icon"
+                             viewBox="0 0 24 24"
+                             aria-hidden="true">
+
+                            <rect x="3"
+                                  y="5"
+                                  width="18"
+                                  height="16"
+                                  rx="2">
+                            </rect>
+
+                            <path d="M16 3v4M8 3v4M3 10h18">
+                            </path>
+
+                        </svg>
+
+                    </button>
+
+
+                    <!-- Posted value -->
+
+                    <input asp-for="Vehicle.YearOfManufacture"
+                           id="yearInput"
+                           type="hidden" />
+
+
+                    <!-- Year picker popup -->
+
+                    <div id="yearPickerPopup"
+                         class="year-picker-popup"
+                         role="dialog"
+                         aria-label="Select year">
+
+                        <div class="year-picker-navigation">
+
+                            <button type="button"
+                                    id="previousYears"
+                                    class="year-nav-button"
+                                    aria-label="Previous years">
+
+                                <svg viewBox="0 0 24 24">
+                                    <path d="m15 18-6-6 6-6"></path>
+                                </svg>
+
+                            </button>
+
+
+                            <span id="yearRange"
+                                  class="year-range">
+                            </span>
+
+
+                            <button type="button"
+                                    id="nextYears"
+                                    class="year-nav-button"
+                                    aria-label="Next years">
+
+                                <svg viewBox="0 0 24 24">
+                                    <path d="m9 18 6-6-6-6"></path>
+                                </svg>
+
+                            </button>
+
+                        </div>
+
+
+                        <div id="yearGrid"
+                             class="year-grid">
+                        </div>
+
+                    </div>
+
+
+                    <span asp-validation-for="Vehicle.YearOfManufacture"
+                          class="text-danger">
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- ==================================
+                 WEIGHT
+                 ================================== -->
+
+            <div class="form-group">
+
+                <label asp-for="Vehicle.WeightKg"
+                       class="form-label">
+                    Weight (kg)
+                </label>
+
+                <input asp-for="Vehicle.WeightKg"
+                       id="vehicleWeightInput"
+                       type="text"
+                       inputmode="decimal"
+                       class="form-control"
+                       placeholder="e.g. 1500.50"
+                       autocomplete="off" />
+
+                <span asp-validation-for="Vehicle.WeightKg"
+                      class="text-danger">
+                </span>
+
+                <div class="form-text">
+                    Enter a positive weight with no more than two decimal places.
+                </div>
+
+
+                <div class="vehicle-category-result"
+                     id="vehicleCategoryResult"
+                     hidden
+                     aria-live="polite">
+                    <div class="vehicle-category-result-icon"
+                         id="vehicleCategoryResultIcon"></div>
+
+                    <div>
+                        <div class="vehicle-category-result-label">
+                            This vehicle will be categorised as
+                        </div>
+                        <strong id="vehicleCategoryResultName"></strong>
+                        <div class="vehicle-category-result-range"
+                             id="vehicleCategoryResultRange"></div>
+                    </div>
+                </div>
+
+                <div class="vehicle-category-result vehicle-category-result-error"
+                     id="vehicleCategoryNoMatch"
+                     hidden
+                     aria-live="polite">
+                    No configured category matches this weight.
+                </div>
+
+            </div>
+
+
+            <!-- ==================================
+                 ACTIONS
+                 ================================== -->
+
+            <div class="category-form-actions">
+
+                <a asp-page="/Vehicles/Index"
+                   class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+
+                <button type="submit"
+                        class="btn btn-primary">
+                    Add Vehicle
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- ==============================================
+     SUCCESS MODAL
+     ============================================== -->
+
+@if (showSuccessModal)
+{
+    <div class="modal fade"
+         id="vehicleSuccessModal"
+         tabindex="-1"
+         aria-labelledby="vehicleSuccessModalLabel"
+         aria-hidden="true">
+
+        <div class="modal-dialog modal-dialog-centered">
+
+            <div class="modal-content vehicle-success-modal">
+
+                <div class="modal-body">
+
+                    <div class="vehicle-success-icon"
+                         aria-hidden="true">
+                        ✓
+                    </div>
+
+                    <h2 id="vehicleSuccessModalLabel">
+                        Vehicle Added Successfully
+                    </h2>
+
+                    <p>
+                        The vehicle has been added and its category
+                        was determined automatically from its weight.
+                    </p>
+
+                </div>
+
+
+                <div class="modal-footer vehicle-success-actions">
+
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal">
+                        Add Another Vehicle
+                    </button>
+
+                    <a asp-page="/Vehicles/Index"
+                       class="btn btn-primary">
+                        View All Vehicles
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
+
+<style>
+    .vehicle-category-scale-card {
+        padding: 1.4rem 1.5rem;
+        text-align: center;
+    }
+
+    .vehicle-category-scale-heading h2 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+    }
+
+    .vehicle-category-scale-heading p {
+        margin: .25rem 0 1.5rem;
+        color: #667085;
+        font-size: .9rem;
+    }
+
+    .vehicle-category-line-overview {
+        padding: .25rem 1rem 0;
+    }
+
+    .vehicle-category-line-labels {
+        display: grid;
+        grid-template-columns: repeat(var(--category-count), minmax(0, 1fr));
+        margin-bottom: .65rem;
+    }
+
+    .vehicle-category-line-label {
+        min-width: 0;
+        text-align: center;
+    }
+
+    .vehicle-category-line-icon {
+        display: block;
+        margin-bottom: .2rem;
+        font-size: 1.25rem;
+        line-height: 1.3;
+    }
+
+    .vehicle-category-line-label strong {
+        display: block;
+        overflow: hidden;
+        padding: 0 .35rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: .88rem;
+    }
+
+    .vehicle-category-line-scale {
+        position: relative;
+        height: 46px;
+    }
+
+    .vehicle-category-line-track {
+        position: absolute;
+        top: 6px;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: #8c191c;
+        border-radius: 999px;
+    }
+
+    .vehicle-category-line-boundary {
+        position: absolute;
+        top: 0;
+        transform: translateX(-50%);
+        text-align: center;
+    }
+
+    .vehicle-category-line-dot {
+        display: block;
+        width: 12px;
+        height: 12px;
+        margin: 0 auto;
+        background: #fff;
+        border: 3px solid #8c191c;
+        border-radius: 50%;
+    }
+
+    .vehicle-category-line-value {
+        display: block;
+        margin-top: .35rem;
+        color: #667085;
+        font-size: .8rem;
+        white-space: nowrap;
+    }
+
+    .vehicle-category-line-boundary:first-of-type {
+        transform: none;
+        text-align: left;
+    }
+
+    .vehicle-category-line-boundary:last-child {
+        transform: translateX(-100%);
+        text-align: right;
+    }
+
+    .vehicle-category-scale-rule {
+        margin-top: .65rem;
+        text-align: center;
+        color: #667085;
+        font-size: .82rem;
+    }
+
+    .vehicle-category-scale-rule strong {
+        color: #202124;
+    }
+
+    .vehicle-category-result {
+        display: flex;
+        align-items: center;
+        gap: .85rem;
+        margin-top: 1rem;
+        padding: .9rem 1rem;
+        border: 1px solid #d8e8df;
+        border-radius: 10px;
+        background: #f7fbf8;
+    }
+
+    .vehicle-category-result[hidden] {
+        display: none;
+    }
+
+    .vehicle-category-result-icon {
+        flex: 0 0 auto;
+        font-size: 1.65rem;
+    }
+
+    .vehicle-category-result-label {
+        margin-bottom: .1rem;
+        color: #667085;
+        font-size: .8rem;
+    }
+
+    .vehicle-category-result strong {
+        display: block;
+        color: #202124;
+        font-size: .98rem;
+    }
+
+    .vehicle-category-result-range {
+        margin-top: .1rem;
+        color: #667085;
+        font-size: .82rem;
+    }
+
+    .vehicle-category-result-error {
+        color: #b42318;
+        border-color: #f4c7c3;
+        background: #fff6f5;
+    }
+
+    @@media (max-width: 767.98px) {
+        .vehicle-category-line-overview {
+            overflow-x: auto;
+            padding-left: .5rem;
+            padding-right: .5rem;
+        }
+
+        .vehicle-category-line-labels,
+        .vehicle-category-line-scale {
+            min-width: 620px;
+        }
+    }
+</style>
+
+
+@section Scripts {
+
+    <partial name="_ValidationScriptsPartial" />
+
+
+    <!-- ==========================================
+         LIVE CATEGORY PREVIEW
+         ========================================== -->
+
+    <script>
+        (() => {
+            const categories = @Html.Raw(
+                System.Text.Json.JsonSerializer.Serialize(
+                    Model.Categories.Select(category => new
+                    {
+                        name = category.Name,
+                        minWeight = category.MinWeight,
+                        maxWeight = category.MaxWeight,
+                        icon = category.Icon
+                    })
+                )
+            );
+
+            const icons = @Html.Raw(iconsJson);
+
+            const input = document.getElementById("vehicleWeightInput");
+            const result = document.getElementById("vehicleCategoryResult");
+            const noMatch = document.getElementById("vehicleCategoryNoMatch");
+            const resultIcon = document.getElementById("vehicleCategoryResultIcon");
+            const resultName = document.getElementById("vehicleCategoryResultName");
+            const resultRange = document.getElementById("vehicleCategoryResultRange");
+
+            function formatWeight(value) {
+                return Number(value).toLocaleString(undefined, {
+                    maximumFractionDigits: 2
+                });
+            }
+
+            function updateCategoryPreview() {
+                result.hidden = true;
+                noMatch.hidden = true;
+
+                const raw = input.value.trim();
+
+                if (raw === "") {
+                    return;
+                }
+
+                // Keep browser preview conservative. The server performs
+                // authoritative decimal and vehicle validation on submit.
+                if (!/^\d+(?:\.\d{0,2})?$/.test(raw)) {
+                    return;
+                }
+
+                const weight = Number(raw);
+
+                if (!Number.isFinite(weight) || weight <= 0) {
+                    return;
+                }
+
+                const category = categories.find(item =>
+                    weight >= Number(item.minWeight) &&
+                    (item.maxWeight === null ||
+                     weight < Number(item.maxWeight))
+                );
+
+                if (!category) {
+                    noMatch.hidden = false;
+                    return;
+                }
+
+                resultIcon.textContent =
+                    icons[String(category.icon ?? "").toLowerCase()] ?? icons["other"];
+
+                resultName.textContent = category.name;
+
+                resultRange.textContent =
+                    category.maxWeight === null
+                        ? `${formatWeight(category.minWeight)} kg and above`
+                        : `${formatWeight(category.minWeight)} – ${formatWeight(category.maxWeight)} kg`;
+
+                result.hidden = false;
+            }
+
+            input?.addEventListener("input", updateCategoryPreview);
+            updateCategoryPreview();
+        })();
+    </script>
+
+
+    <!-- ==========================================
+         YEAR PICKER
+         ========================================== -->
+
+    <script>
+        (() => {
+
+            const minimumYear = 1886;
+            const maximumYear = @maximumYear;
+            const currentYear = @currentYear;
+
+            const yearsPerPage = 12;
+
+            const button =
+                document.getElementById("yearPickerButton");
+
+            const popup =
+                document.getElementById("yearPickerPopup");
+
+            const grid =
+                document.getElementById("yearGrid");
+
+            const range =
+                document.getElementById("yearRange");
+
+            const hiddenInput =
+                document.getElementById("yearInput");
+
+            const selectedText =
+                document.getElementById("selectedYearText");
+
+            const previousButton =
+                document.getElementById("previousYears");
+
+            const nextButton =
+                document.getElementById("nextYears");
+
+
+            let selectedYear =
+                parseInt(hiddenInput.value);
+
+            if (
+                isNaN(selectedYear) ||
+                selectedYear < minimumYear ||
+                selectedYear > maximumYear
+            ) {
+                selectedYear = currentYear;
+
+                hiddenInput.value =
+                    selectedYear;
+
+                selectedText.textContent =
+                    selectedYear;
+            }
+
+
+            let pageStart =
+                Math.floor(
+                    selectedYear / yearsPerPage
+                ) * yearsPerPage;
+
+
+            function renderYears() {
+
+                grid.innerHTML = "";
+
+                const pageEnd =
+                    pageStart +
+                    yearsPerPage -
+                    1;
+
+                range.textContent =
+                    `${pageStart} - ${pageEnd}`;
+
+
+                for (
+                    let year = pageStart;
+                    year <= pageEnd;
+                    year++
+                ) {
+
+                    const yearButton =
+                        document.createElement(
+                            "button"
+                        );
+
+                    yearButton.type =
+                        "button";
+
+                    yearButton.className =
+                        "year-option";
+
+                    yearButton.textContent =
+                        year;
+
+
+                    if (
+                        year < minimumYear ||
+                        year > maximumYear
+                    ) {
+
+                        yearButton.disabled =
+                            true;
+
+                        yearButton.classList.add(
+                            "year-disabled"
+                        );
+                    }
+
+
+                    if (
+                        year === selectedYear
+                    ) {
+
+                        yearButton.classList.add(
+                            "selected"
+                        );
+                    }
+
+
+                    yearButton.addEventListener(
+                        "click",
+                        () => {
+
+                            selectedYear =
+                                year;
+
+                            hiddenInput.value =
+                                year;
+
+                            selectedText.textContent =
+                                year;
+
+                            closePicker();
+
+                            renderYears();
+                        }
+                    );
+
+
+                    grid.appendChild(
+                        yearButton
+                    );
+                }
+
+
+                previousButton.disabled =
+                    pageStart <= minimumYear;
+
+
+                nextButton.disabled =
+                    pageEnd >= maximumYear;
+            }
+
+
+            function openPicker() {
+
+                popup.classList.add(
+                    "open"
+                );
+
+                button.setAttribute(
+                    "aria-expanded",
+                    "true"
+                );
+
+                renderYears();
+            }
+
+
+            function closePicker() {
+
+                popup.classList.remove(
+                    "open"
+                );
+
+                button.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+            }
+
+
+            button.addEventListener(
+                "click",
+                (event) => {
+
+                    event.stopPropagation();
+
+                    if (
+                        popup.classList.contains(
+                            "open"
+                        )
+                    ) {
+                        closePicker();
+                    }
+                    else {
+                        openPicker();
+                    }
+                }
+            );
+
+
+            previousButton.addEventListener(
+                "click",
+                (event) => {
+
+                    event.stopPropagation();
+
+                    const newStart =
+                        pageStart -
+                        yearsPerPage;
+
+                    if (
+                        newStart +
+                        yearsPerPage -
+                        1 >=
+                        minimumYear
+                    ) {
+
+                        pageStart =
+                            newStart;
+
+                        renderYears();
+                    }
+                }
+            );
+
+
+            nextButton.addEventListener(
+                "click",
+                (event) => {
+
+                    event.stopPropagation();
+
+                    const newStart =
+                        pageStart +
+                        yearsPerPage;
+
+                    if (
+                        newStart <=
+                        maximumYear
+                    ) {
+
+                        pageStart =
+                            newStart;
+
+                        renderYears();
+                    }
+                }
+            );
+
+
+            popup.addEventListener(
+                "click",
+                (event) => {
+
+                    event.stopPropagation();
+                }
+            );
+
+
+            document.addEventListener(
+                "click",
+                closePicker
+            );
+
+
+            document.addEventListener(
+                "keydown",
+                (event) => {
+
+                    if (
+                        event.key ===
+                        "Escape"
+                    ) {
+                        closePicker();
+                    }
+                }
+            );
+
+
+            renderYears();
+
+        })();
+    </script>
+
+
+    <!-- ==========================================
+         SUCCESS MODAL
+         ========================================== -->
+
+    @if (showSuccessModal)
+    {
+        <script>
+            document.addEventListener(
+                "DOMContentLoaded",
+                function () {
+
+                    const modalElement =
+                        document.getElementById(
+                            "vehicleSuccessModal"
+                        );
+
+                    if (!modalElement) {
+                        return;
+                    }
+
+                    const successModal =
+                        new bootstrap.Modal(
+                            modalElement
+                        );
+
+                    successModal.show();
+                }
+            );
+        </script>
+    }
+}

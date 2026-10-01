@@ -1,0 +1,144 @@
+﻿@page
+@model VehicleManagement.Web.Pages.IndexModel
+
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="dashboard-page">
+
+    <div class="page-heading">
+        <div>
+            <h1>Dashboard</h1>
+            <p>
+                Overview of your vehicle management system.
+            </p>
+        </div>
+    </div>
+
+    <div class="dashboard-stats">
+
+        <div class="stat-card">
+            <div class="stat-icon">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="5"
+                          width="18"
+                          height="14"
+                          rx="2"></rect>
+
+                    <path d="M7 9h10M7 13h10M7 17h6"></path>
+                </svg>
+            </div>
+
+            <div class="stat-content">
+                <span class="stat-label">
+                    Total Vehicles
+                </span>
+
+                <strong class="stat-value">
+                    @Model.TotalVehicles
+                </strong>
+            </div>
+        </div>
+
+
+        <div class="stat-card">
+            <div class="stat-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 3 21 12 12 21 3 12Z"></path>
+                </svg>
+            </div>
+
+            <div class="stat-content">
+                <span class="stat-label">
+                    Total Categories
+                </span>
+
+                <strong class="stat-value">
+                    @Model.TotalCategories
+                </strong>
+            </div>
+        </div>
+
+    </div>
+
+
+    <section class="dashboard-section">
+
+        <div class="section-header">
+            <div>
+                <h2>Quick Actions</h2>
+
+                <p>
+                    Common vehicle management tasks.
+                </p>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+
+
+
+    <a asp-page="/Vehicles/Index"
+       class="quick-action-card">
+
+        <div class="quick-action-icon">
+            <svg viewBox="0 0 24 24">
+                <rect x="3" y="5"
+                      width="18"
+                      height="14"
+                      rx="2"></rect>
+                <path d="M7 9h10M7 13h10M7 17h6"></path>
+            </svg>
+        </div>
+
+        <div>
+            <strong>View Vehicles</strong>
+            <span>View and sort registered vehicles</span>
+        </div>
+
+        <span class="action-arrow">→</span>
+    </a>
+
+
+    <a asp-page="/Categories/ViewAll"
+       class="quick-action-card">
+
+        <div class="quick-action-icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 3 21 12 12 21 3 12Z"></path>
+            </svg>
+        </div>
+
+        <div>
+            <strong>View Categories</strong>
+            <span>View the current category configuration</span>
+        </div>
+
+        <span class="action-arrow">→</span>
+    </a>
+
+
+    <a asp-page="/Categories/Index"
+       class="quick-action-card">
+
+        <div class="quick-action-icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M4 6h16M4 12h16M4 18h16"></path>
+                <path d="M8 3v6M16 9v6M10 15v6"></path>
+            </svg>
+        </div>
+
+        <div>
+            <strong>Manage Categories</strong>
+            <span>Add, edit and delete categories</span>
+        </div>
+
+        <span class="action-arrow">→</span>
+    </a>
+
+</div>
+
+    </section>
+
+</div>

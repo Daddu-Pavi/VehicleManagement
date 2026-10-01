@@ -1,0 +1,334 @@
+@page
+@model VehicleManagement.Web.Pages.Vehicles.IndexModel
+@using VehicleManagement.Core.Constants
+
+@{
+    ViewData["Title"] = "All Vehicles";
+}
+
+<div class="category-form-page vehicles-list-page">
+
+    <!-- ==========================================
+         PAGE HEADER
+         ========================================== -->
+
+    <div class="vehicles-page-header">
+
+        <div>
+            <h1>All Vehicles</h1>
+
+            <p>
+                View vehicles and their automatically determined categories.
+            </p>
+        </div>
+
+    </div>
+
+
+    <!-- ==========================================
+         SUCCESS MESSAGE
+         ========================================== -->
+
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="alert alert-success"
+             role="alert">
+            @successMessage
+        </div>
+    }
+
+
+    <!-- ==========================================
+         EMPTY STATE
+         ========================================== -->
+
+    @if (Model.Vehicles.Count == 0)
+    {
+        <div class="vehicle-list-empty-state">
+
+            <div class="vehicle-empty-icon"
+                 aria-hidden="true">
+                🚗
+            </div>
+
+            <h2>No vehicles found</h2>
+
+            <p>
+                Add your first vehicle to get started.
+            </p>
+
+            <a asp-page="./Create"
+               class="btn btn-primary">
+                + Add Vehicle
+            </a>
+
+        </div>
+    }
+    else
+    {
+
+        <!-- ======================================
+             SORT VEHICLES
+             ====================================== -->
+
+        <div class="vehicle-sort-card">
+
+            <div class="vehicle-card-heading">
+
+                <div>
+                    <h2>Sort Vehicles</h2>
+
+                    <p>
+                        Choose how you would like the vehicle list to be ordered.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <form method="get"
+                  class="vehicle-sort-form">
+
+                <div class="vehicle-sort-field">
+
+                    <label for="sortBy"
+                           class="form-label">
+                        Sort by
+                    </label>
+
+                    <select id="sortBy"
+                            name="sortBy"
+                            class="form-select">
+
+                        <option value="owner"
+                                selected="@(Model.SortBy == "owner")">
+                            Owner
+                        </option>
+
+                        <option value="manufacturer"
+                                selected="@(Model.SortBy == "manufacturer")">
+                            Manufacturer
+                        </option>
+
+                        <option value="year"
+                                selected="@(Model.SortBy == "year")">
+                            Year of Manufacture
+                        </option>
+
+                        <option value="weight"
+                                selected="@(Model.SortBy == "weight")">
+                            Weight
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="vehicle-sort-field">
+
+                    <label for="sortDirection"
+                           class="form-label">
+                        Order
+                    </label>
+
+                    <select id="sortDirection"
+                            name="sortDirection"
+                            class="form-select">
+
+                        <option value="asc"
+                                selected="@(Model.SortDirection == "asc")">
+                            Ascending
+                        </option>
+
+                        <option value="desc"
+                                selected="@(Model.SortDirection == "desc")">
+                            Descending
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="vehicle-sort-action">
+
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Apply Sort
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+
+        <!-- ======================================
+             VEHICLE LIST
+             ====================================== -->
+
+        <div class="vehicle-list-card">
+
+            <div class="vehicle-list-header">
+
+                <div>
+                    <h2>Vehicles (@Model.Vehicles.Count)</h2>
+                </div>
+
+
+                <!-- Selected sorting indicator -->
+
+                <div class="vehicle-current-sort">
+
+                    <span class="vehicle-current-sort-label">
+                        Sorted by
+                    </span>
+
+                    <span class="vehicle-current-sort-value">
+
+                        @switch (Model.SortBy)
+                        {
+                            case "manufacturer":
+                                <text>Manufacturer</text>
+                                break;
+
+                            case "year":
+                                <text>Year</text>
+                                break;
+
+                            case "weight":
+                                <text>Weight</text>
+                                break;
+
+                            default:
+                                <text>Owner</text>
+                                break;
+                        }
+
+                        <span aria-hidden="true">
+                            @(Model.SortDirection == "desc"
+                                ? "↓"
+                                : "↑")
+                        </span>
+
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="table-responsive">
+
+                <table class="table table-hover vehicle-table">
+
+                    <thead>
+
+                        <tr>
+                            <th>Owner</th>
+                            <th>Manufacturer</th>
+                            <th>Year</th>
+                            <th>Weight</th>
+                            <th>Category</th>
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        @foreach (var vehicle in Model.Vehicles)
+                        {
+                            <tr>
+
+                                <!-- OWNER -->
+
+                                <td>
+
+                                    <div class="vehicle-owner">
+
+                                        <div class="vehicle-owner-mark"
+                                             aria-hidden="true">
+
+                                            @if (!string.IsNullOrWhiteSpace(
+                                                vehicle.OwnerName))
+                                            {
+                                                @vehicle.OwnerName.Substring(0, 1).ToUpper()
+                                            }
+
+                                        </div>
+
+                                        <span>
+                                            @vehicle.OwnerName
+                                        </span>
+
+                                    </div>
+
+                                </td>
+
+
+                                <!-- MANUFACTURER -->
+
+                                <td>
+                                    <span class="vehicle-manufacturer">
+                                        @vehicle.Manufacturer
+                                    </span>
+                                </td>
+
+
+                                <!-- YEAR -->
+
+                                <td>
+                                    @vehicle.YearOfManufacture
+                                </td>
+
+
+                                <!-- WEIGHT -->
+
+                                <td>
+
+                                    <span class="vehicle-weight">
+                                        @vehicle.WeightKg.ToString("0.##")
+                                        <span>kg</span>
+                                    </span>
+
+                                </td>
+
+
+                                <!-- CATEGORY -->
+
+                                <td>
+
+                                    <div class="vehicle-category">
+
+                                        <span class="vehicle-category-icon"
+                                              aria-hidden="true">
+
+                                            @VehicleCategoryIcons.GetSymbol(vehicle.CategoryIcon)
+
+                                        </span>
+
+
+                                        <span class="vehicle-category-name">
+                                            @vehicle.CategoryName
+                                        </span>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+    }
+
+</div>
