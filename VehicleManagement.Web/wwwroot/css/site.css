@@ -2978,6 +2978,192 @@ html {
   padding: 1.4rem 1.5rem;
   text-align: center;
 }
+.affected-warning {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+
+    background: #fff1f2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #b91c1c;
+    border-radius: 8px;
+
+    color: #991b1b;
+}
+
+.affected-warning-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    width: 26px;
+    height: 26px;
+
+    background: #b91c1c;
+    color: #fff;
+    border-radius: 50%;
+
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.affected-warning-content {
+    line-height: 1.4;
+}
+
+.affected-warning-content strong {
+    color: #991b1b;
+    font-weight: 700;
+}
+/* =========================================================
+   CATEGORY IMPACT / WARNING MODALS
+   ========================================================= */
+
+.category-impact-modal {
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.category-impact-warning {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.category-impact-description {
+    margin-bottom: 1rem;
+    color: #495057;
+}
+
+
+/* =========================================================
+   IMPACT TABLE
+   ========================================================= */
+
+.category-impact-table {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.category-impact-table thead th {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    color: #495057;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.category-impact-table tbody td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eeeeee;
+    vertical-align: middle;
+}
+
+.category-impact-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.category-impact-table tfoot th {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-top: 2px solid #dee2e6;
+    font-weight: 700;
+}
+
+
+/* =========================================================
+   CATEGORY MOVEMENT
+   ========================================================= */
+
+.category-impact-name {
+    font-weight: 600;
+}
+
+.category-impact-arrow {
+    display: inline-block;
+    margin: 0 0.6rem;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   IMPACT SUMMARY
+   ========================================================= */
+
+.category-impact-summary {
+    margin-top: 1rem;
+    padding: 0.8rem 1rem;
+    background: #fff3cd;
+    border: 1px solid #ffecb5;
+    border-radius: 8px;
+    color: #664d03;
+}
+
+
+/* =========================================================
+   DELETE - NEW SHARED BOUNDARY
+   ========================================================= */
+
+.delete-boundary-section {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.delete-boundary-section .form-label {
+    margin-bottom: 0.25rem;
+}
+
+.delete-boundary-section .input-group {
+    max-width: 240px;
+}
+
+
+/* =========================================================
+   MODAL FOOTER
+   ========================================================= */
+
+.category-impact-modal .modal-footer {
+    padding-top: 0.75rem;
+}
+
+.category-impact-modal .modal-footer .btn {
+    min-width: 90px;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 576px) {
+
+    .category-impact-table th,
+    .category-impact-table td {
+        padding: 0.6rem;
+        font-size: 0.85rem;
+    }
+
+    .category-impact-arrow {
+        margin: 0 0.3rem;
+    }
+
+    .delete-boundary-section .input-group {
+        max-width: 100%;
+    }
+}
 
 /* =========================================================
    EMPTY STATE
@@ -4692,4 +4878,91 @@ html {
 
 .category-name-with-icon .vehicle-category-icon {
     flex-shrink: 0;
+}
+.category-upper-field {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.category-upper-field .category-boundary-edit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.category-upper-field .category-edit-control {
+    width: 120px;
+}
+
+.category-upper-field .category-final-note {
+    display: block;
+    margin-top: 5px;
+    padding-left: 0;
+    font-size: 0.78rem;
+    line-height: 1.25;
+    color: #667085;
+    white-space: nowrap;
+}
+
+.category-upper-field .boundary-unit {
+    flex-shrink: 0;
+}
+.proposed-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.proposed-header h2 {
+    margin: 0 0 0.3rem;
+}
+
+.proposed-description {
+    margin: 0;
+    color: #667085;
+    font-size: 0.9rem;
+}
+
+.unsaved-badge {
+    flex-shrink: 0;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid #efb6b6;
+    border-radius: 999px;
+    background: #fff1f1;
+    color: #a52323;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+@media (max-width: 576px) {
+    .proposed-header {
+        gap: 0.75rem;
+    }
+
+    .unsaved-badge {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.6rem;
+    }
+}
+.category-range-heading > div {
+    text-align: left;
+}
+
+.category-range-heading h2 {
+    margin: 0 0 0.25rem 0;
+    padding: 0;
+}
+
+.category-range-heading #proposedMessage {
+    margin: 0;
+}
+
+.category-range-heading .pending-indicator {
+    flex-shrink: 0;
+    margin: 0;
 }

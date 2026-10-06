@@ -242,28 +242,21 @@ public class CategoryService : ICategoryService
 
         // =================================================
         // CASE 1:
-        // ADD NEW FINAL OPEN-ENDED CATEGORY
+        // ADD / REPLACE WITH A NEW FINAL OPEN-ENDED CATEGORY
         //
-        // Example:
-        //
-        // Heavy       1800 - ∞
-        //
-        // Add:
-        // Super Heavy 5000 - ∞
-        //
-        // Result:
-        // Heavy       1800 - 5000
-        // Super Heavy 5000 - ∞
+        // A new [minWeight, ∞) category owns every weight from
+        // its lower boundary upward. Existing categories that
+        // start at or above that boundary are therefore fully
+        // swallowed. If the boundary falls inside an existing
+        // category, that category is shortened to end at the
+        // new lower boundary.
         // =================================================
 
         if (!maxWeight.HasValue)
         {
-            var finalCategory =
-                currentCategories
-                    .OrderBy(c => c.MinWeight)
-                    .Last();
-
-            if (finalCategory.MaxWeight != null)
+            // The current configuration must already have one
+            // open-ended final category.
+            if (currentCategories[^1].MaxWeight != null)
             {
                 result.ErrorMessage =
                     "The current final category configuration is invalid.";
@@ -271,81 +264,81 @@ public class CategoryService : ICategoryService
                 return result;
             }
 
+            // Every category beginning at or above the new lower
+            // boundary is completely covered by [minWeight, ∞).
+            var openEndedCategoriesToDelete = currentCategories
+                .Where(c => c.MinWeight >= minWeight)
+                .ToList();
 
-            if (minWeight <= finalCategory.MinWeight)
+            // Preserve the category immediately below the new one.
+            // If minWeight falls inside it, shorten it to minWeight.
+            var openEndedLowerNeighbour = currentCategories
+                .Where(c => c.MinWeight < minWeight)
+                .OrderByDescending(c => c.MinWeight)
+                .FirstOrDefault();
+
+            if (openEndedLowerNeighbour == null && minWeight != 0)
             {
                 result.ErrorMessage =
-                    $"The new final category must start above " +
-                    $"{finalCategory.MinWeight:0.##} kg.";
+                    "The proposed range would leave weights below the new category without coverage.";
 
                 return result;
             }
 
+            var proposedFinalConfiguration = currentCategories
+                .Where(c => !openEndedCategoriesToDelete.Contains(c))
+                .ToList();
 
-            var oldMax =
-                finalCategory.MaxWeight;
+            if (openEndedLowerNeighbour != null)
+            {
+                var oldMax = openEndedLowerNeighbour.MaxWeight;
 
-
-            finalCategory.MaxWeight =
-                minWeight;
-
-
-            result.Changes.Add(
-                $"{finalCategory.Name}: " +
-                $"{FormatRange(
-                    finalCategory.MinWeight,
-                    oldMax)} → " +
-                $"{FormatRange(
-                    finalCategory.MinWeight,
-                    minWeight)}");
-
-
-            var newFinalCategory =
-                new VehicleCategory
+                if (oldMax != minWeight)
                 {
-                    Name = name.Trim(),
-                    Icon = icon,
-                    MinWeight = minWeight,
-                    MaxWeight = null
-                };
+                    openEndedLowerNeighbour.MaxWeight = minWeight;
 
+                    result.Changes.Add(
+                        $"{openEndedLowerNeighbour.Name}: " +
+                        $"{FormatRange(openEndedLowerNeighbour.MinWeight, oldMax)} → " +
+                        $"{FormatRange(openEndedLowerNeighbour.MinWeight, minWeight)}");
+                }
+            }
 
-            currentCategories.Add(
-                newFinalCategory);
+            foreach (var category in openEndedCategoriesToDelete)
+            {
+                result.Changes.Add(
+                    $"{category.Name}: DELETE " +
+                    $"({FormatRange(category.MinWeight, category.MaxWeight)})");
+            }
 
+            result.CategoriesToDelete = openEndedCategoriesToDelete;
 
-            var proposedFinalConfiguration =
-                currentCategories
-                    .OrderBy(c => c.MinWeight)
-                    .ToList();
+            var newFinalCategory = new VehicleCategory
+            {
+                Name = name.Trim(),
+                Icon = icon,
+                MinWeight = minWeight,
+                MaxWeight = null
+            };
 
+            proposedFinalConfiguration.Add(newFinalCategory);
+            proposedFinalConfiguration = proposedFinalConfiguration
+                .OrderBy(c => c.MinWeight)
+                .ToList();
 
-            var finalErrors =
-                ValidateConfiguration(
-                    proposedFinalConfiguration);
-
+            var finalErrors = ValidateConfiguration(proposedFinalConfiguration);
 
             if (finalErrors.Count > 0)
             {
-                result.ErrorMessage =
-                    string.Join(
-                        " ",
-                        finalErrors);
-
+                result.ErrorMessage = string.Join(" ", finalErrors);
                 return result;
             }
 
-
             result.Changes.Add(
                 $"{newFinalCategory.Name}: new category " +
-                $"{FormatRange(
-                    newFinalCategory.MinWeight,
-                    newFinalCategory.MaxWeight)}");
+                $"{FormatRange(newFinalCategory.MinWeight, newFinalCategory.MaxWeight)}");
 
-
-            result.ProposedCategories =
-                proposedFinalConfiguration;
-
+            result.ProposedCategories = proposedFinalConfiguration;
             result.CanProceed = true;
 
             return result;
